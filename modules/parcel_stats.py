@@ -8,7 +8,7 @@ from shapely import wkt
 
 def create_parcel_yield_timeline(df, parcel_name):
     """Vytvorenie časovej osi výnosov pre konkrétnu parcelu"""
-    parcel_data = df[df['name'] == parcel_name].copy()
+    parcel_data = df[df['name'].astype(str) == parcel_name].copy()
     
     if parcel_data.empty:
         return None
@@ -42,7 +42,7 @@ def create_parcel_yield_timeline(df, parcel_name):
 
 def create_parcel_crop_comparison(df, parcel_name):
     """Porovnanie plodín na konkrétnej parcele"""
-    parcel_data = df[df['name'] == parcel_name].copy()
+    parcel_data = df[df['name'].astype(str) == parcel_name].copy()
     
     if parcel_data.empty:
         return None
@@ -87,7 +87,7 @@ def create_parcel_crop_comparison(df, parcel_name):
 
 def create_parcel_performance_radar(df, parcel_name):
     """Radarový graf výkonnosti parcely"""
-    parcel_data = df[df['name'] == parcel_name].copy()
+    parcel_data = df[df['name'].astype(str) == parcel_name].copy()
     
     if parcel_data.empty:
         return None
@@ -140,7 +140,7 @@ def create_parcel_map(df, selected_parcel):
     """Vytvorenie mapy s vybranou parcelou pomocou geopandas"""
     try:
         # Filtrovanie dát pre vybranú parcelu
-        parcel_data = df[df['name'] == selected_parcel].copy()
+        parcel_data = df[df['name'].astype(str) == selected_parcel].copy()
         
         if parcel_data.empty or parcel_data['geometry'].isna().all():
             return None
@@ -205,7 +205,8 @@ def show_parcel_statistics(df):
     st.sidebar.header("Výber parcely")
     
     # Získanie zoznamu parciel
-    available_parcels = sorted(df['name'].unique())
+    # Vyčistenie a konverzia na string pre správne triedenie
+    available_parcels = sorted([str(parcel) for parcel in df['name'].unique() if pd.notna(parcel)])
     
     if not available_parcels:
         st.error("Nie sú dostupné žiadne parcele.")
@@ -223,7 +224,8 @@ def show_parcel_statistics(df):
         return
     
     # Filtrovanie dát pre vybranú parcelu
-    parcel_data = df[df['name'] == selected_parcel].copy()
+    # Konverzia na string pre správne porovnanie
+    parcel_data = df[df['name'].astype(str) == selected_parcel].copy()
     
     if parcel_data.empty:
         st.error(f"Pre parcelu {selected_parcel} nie sú dostupné žiadne dáta.")

@@ -86,13 +86,6 @@ def main():
         else:
             st.session_state.selected_crop = available_crops[0]
     
-    # Tlačidlo na reset na PŠENICE OZ.
-    if st.sidebar.button("🔄 Reset na PŠENICE OZ.", key="reset_crop"):
-        if "PŠENICE OZ." in available_crops:
-            st.session_state.selected_crop = "PŠENICE OZ."
-            st.sidebar.success("Plodina resetovaná na PŠENICE OZ.")
-            st.rerun()
-    
     # Výber plodiny s aktuálnou hodnotou zo session state
     selected_crop = st.sidebar.selectbox(
         "Vyberte plodinu:", 
