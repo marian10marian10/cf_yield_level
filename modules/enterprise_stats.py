@@ -119,6 +119,26 @@ def create_parcel_performance_map(df):
         # Nastavenie CRS na WGS84
         gdf.set_crs(epsg=4326, inplace=True)
         
+        # Výpočet bounds pre správny zoom
+        bounds = gdf.total_bounds  # [minx, miny, maxx, maxy]
+        center_lon = (bounds[0] + bounds[2]) / 2
+        center_lat = (bounds[1] + bounds[3]) / 2
+        
+        # Výpočet vhodného zoom levelu na základe veľkosti oblasti
+        lon_range = bounds[2] - bounds[0]
+        lat_range = bounds[3] - bounds[1]
+        max_range = max(lon_range, lat_range)
+        
+        # Nastavenie zoom levelu na základe veľkosti oblasti
+        if max_range > 5:  # Veľká oblasť (celé Slovensko)
+            zoom_level = 6
+        elif max_range > 1:  # Stredná oblasť (kraj)
+            zoom_level = 8
+        elif max_range > 0.1:  # Malá oblasť (okres)
+            zoom_level = 10
+        else:  # Veľmi malá oblasť (obec)
+            zoom_level = 12
+        
         # Vytvorenie mapy pomocou geopandas a plotly
         fig = px.choropleth_mapbox(
             gdf,
@@ -129,8 +149,8 @@ def create_parcel_performance_map(df):
             hover_data=['area', 'crop_count'],
             color_continuous_scale='RdYlGn',
             mapbox_style="open-street-map",
-            zoom=6,
-            center={"lat": 48.6690, "lon": 19.6990},
+            zoom=zoom_level,
+            center={"lat": center_lat, "lon": center_lon},
             title="Výkonnosť parciel podľa priemernej výnosnosti (%)",
             labels={'avg_yield_percentage': 'Priemerná výnosnosť (%)'}
         )

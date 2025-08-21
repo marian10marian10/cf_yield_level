@@ -77,16 +77,32 @@ def main():
     # Výber plodiny v sidebar s prednastavenou hodnotou
     available_crops = sorted(df['crop'].unique())
     
-    # Hľadanie indexu pre PŠENICE OZ
-    default_index = 0
-    if "PŠENICE OZ" in available_crops:
-        default_index = available_crops.index("PŠENICE OZ")
+    # Inicializácia session state pre plodinu
+    if 'selected_crop' not in st.session_state:
+        # Hľadanie indexu pre PŠENICE OZ.
+        if "PŠENICE OZ." in available_crops:
+            st.session_state.selected_crop = "PŠENICE OZ."
+            st.sidebar.success(f"Prednastavená plodina: PŠENICE OZ.")
+        else:
+            st.session_state.selected_crop = available_crops[0]
     
+    # Tlačidlo na reset na PŠENICE OZ.
+    if st.sidebar.button("🔄 Reset na PŠENICE OZ.", key="reset_crop"):
+        if "PŠENICE OZ." in available_crops:
+            st.session_state.selected_crop = "PŠENICE OZ."
+            st.sidebar.success("Plodina resetovaná na PŠENICE OZ.")
+            st.rerun()
+    
+    # Výber plodiny s aktuálnou hodnotou zo session state
     selected_crop = st.sidebar.selectbox(
         "Vyberte plodinu:", 
         available_crops, 
-        index=default_index
+        index=available_crops.index(st.session_state.selected_crop),
+        key="crop_selector"
     )
+    
+    # Aktualizácia session state
+    st.session_state.selected_crop = selected_crop
     
     # Menu s kartami
     st.header("📋 Menu aplikácie")

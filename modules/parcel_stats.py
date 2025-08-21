@@ -155,6 +155,24 @@ def create_parcel_map(df, selected_parcel):
         gdf = gpd.GeoDataFrame([{'name': selected_parcel, 'geometry': parcel_geometry}])
         gdf.set_crs(epsg=4326, inplace=True)
         
+        # Výpočet bounds pre správny zoom
+        bounds = gdf.total_bounds  # [minx, miny, maxx, maxy]
+        center_lon = (bounds[0] + bounds[2]) / 2
+        center_lat = (bounds[1] + bounds[3]) / 2
+        
+        # Výpočet vhodného zoom levelu na základe veľkosti parcely
+        lon_range = bounds[2] - bounds[0]
+        lat_range = bounds[3] - bounds[1]
+        max_range = max(lon_range, lat_range)
+        
+        # Nastavenie zoom levelu na základe veľkosti parcely
+        if max_range > 0.1:  # Veľká parcela
+            zoom_level = 12
+        elif max_range > 0.01:  # Stredná parcela
+            zoom_level = 15
+        else:  # Malá parcela
+            zoom_level = 18
+        
         # Vytvorenie mapy pomocou geopandas a plotly
         fig = px.choropleth_mapbox(
             gdf,
@@ -162,8 +180,8 @@ def create_parcel_map(df, selected_parcel):
             locations=gdf.index,
             color_discrete_sequence=['blue'],
             mapbox_style="open-street-map",
-            zoom=15,
-            center={"lat": parcel_geometry.centroid.y, "lon": parcel_geometry.centroid.x},
+            zoom=zoom_level,
+            center={"lat": center_lat, "lon": center_lon},
             title=f"Parcela: {selected_parcel}",
             hover_name='name'
         )
