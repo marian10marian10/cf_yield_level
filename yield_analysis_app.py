@@ -71,6 +71,23 @@ def main():
     # Výpočet percentuálnych výnosov
     df = calculate_yield_percentage(df)
     
+    # Sidebar pre výber plodiny
+    st.sidebar.header("Nastavenia")
+    
+    # Výber plodiny v sidebar s prednastavenou hodnotou
+    available_crops = sorted(df['crop'].unique())
+    
+    # Hľadanie indexu pre PŠENICE OZ
+    default_index = 0
+    if "PŠENICE OZ" in available_crops:
+        default_index = available_crops.index("PŠENICE OZ")
+    
+    selected_crop = st.sidebar.selectbox(
+        "Vyberte plodinu:", 
+        available_crops, 
+        index=default_index
+    )
+    
     # Menu s kartami
     st.header("📋 Menu aplikácie")
     
@@ -91,7 +108,7 @@ def main():
     
     # Zobrazenie obsahu podľa vybranej karty
     if st.session_state.active_tab == "enterprise":
-        show_enterprise_statistics(df)
+        show_enterprise_statistics(df, selected_crop)
     elif st.session_state.active_tab == "parcel":
         show_parcel_statistics(df)
 

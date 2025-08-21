@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import folium
-from streamlit_folium import st_folium
 import geopandas as gpd
 from shapely import wkt
 
@@ -139,7 +137,7 @@ def create_parcel_performance_radar(df, parcel_name):
     return fig
 
 def create_parcel_map(df, selected_parcel):
-    """Vytvorenie mapy s vybranou parcelou"""
+    """Vytvorenie mapy s vybranou parcelou pomocou geopandas"""
     try:
         # Filtrovanie dát pre vybranú parcelu
         parcel_data = df[df['name'] == selected_parcel].copy()
@@ -157,26 +155,25 @@ def create_parcel_map(df, selected_parcel):
         gdf = gpd.GeoDataFrame([{'name': selected_parcel, 'geometry': parcel_geometry}])
         gdf.set_crs(epsg=4326, inplace=True)
         
-        # Výpočet centra parcely
-        centroid = parcel_geometry.centroid
-        center_lat, center_lon = centroid.y, centroid.x
+        # Vytvorenie mapy pomocou geopandas a plotly
+        fig = px.choropleth_mapbox(
+            gdf,
+            geojson=gdf.__geo_interface__,
+            locations=gdf.index,
+            color_discrete_sequence=['blue'],
+            mapbox_style="open-street-map",
+            zoom=15,
+            center={"lat": parcel_geometry.centroid.y, "lon": parcel_geometry.centroid.x},
+            title=f"Parcela: {selected_parcel}",
+            hover_name='name'
+        )
         
-        # Vytvorenie mapy
-        m = folium.Map(location=[center_lat, center_lon], zoom_start=15)
+        fig.update_layout(
+            height=500,
+            margin={"r":0,"t":30,"l":0,"b":0}
+        )
         
-        # Pridanie parcely na mapu
-        folium.GeoJson(
-            parcel_geometry,
-            style_function=lambda x: {
-                'fillColor': 'blue',
-                'color': 'darkblue',
-                'weight': 2,
-                'fillOpacity': 0.3
-            },
-            popup=folium.Popup(f"<b>{selected_parcel}</b>", max_width=300)
-        ).add_to(m)
-        
-        return m
+        return fig
         
     except Exception as e:
         st.error(f"Chyba pri vytváraní mapy parcely: {e}")
@@ -267,13 +264,12 @@ def show_parcel_statistics(df):
     # Mapa parcely
     st.subheader("🗺️ Mapa parcely")
     
-    if st.button("Zobraziť mapu parcely"):
-        with st.spinner("Generujem mapu parcely..."):
-            map_fig = create_parcel_map(df, selected_parcel)
-            if map_fig:
-                st_folium(map_fig, width=800, height=600)
-            else:
-                st.warning("Nepodarilo sa vytvoriť mapu parcely.")
+    with st.spinner("Generujem mapu parcely pomocou geopandas..."):
+        map_fig = create_parcel_map(df, selected_parcel)
+        if map_fig:
+            st.plotly_chart(map_fig, use_container_width=True)
+        else:
+            st.warning("Nepodarilo sa vytvoriť mapu parcely.")
     
     # Štatistická analýza parcely
     st.subheader("🔬 Štatistická analýza parcely")

@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import folium
-from streamlit_folium import st_folium
 import io
 import geopandas as gpd
 from shapely import wkt
@@ -121,57 +119,35 @@ def create_parcel_performance_map(df):
         # Nastavenie CRS na WGS84
         gdf.set_crs(epsg=4326, inplace=True)
         
-        # Vytvorenie mapy - centrum Slovenska
-        center_lat, center_lon = 48.6690, 19.6990
-        m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
+        # Vytvorenie mapy pomocou geopandas a plotly
+        fig = px.choropleth_mapbox(
+            gdf,
+            geojson=gdf.__geo_interface__,
+            locations=gdf.index,
+            color='avg_yield_percentage',
+            hover_name='name',
+            hover_data=['area', 'crop_count'],
+            color_continuous_scale='RdYlGn',
+            mapbox_style="open-street-map",
+            zoom=6,
+            center={"lat": 48.6690, "lon": 19.6990},
+            title="Výkonnosť parciel podľa priemernej výnosnosti (%)",
+            labels={'avg_yield_percentage': 'Priemerná výnosnosť (%)'}
+        )
         
-        # Pridanie parciel na mapu
-        for idx, row in gdf.iterrows():
-            try:
-                # Farba podľa výkonnosti
-                if row['avg_yield_percentage'] < 80:
-                    color = 'red'
-                elif row['avg_yield_percentage'] < 100:
-                    color = 'orange'
-                else:
-                    color = 'green'
-                
-                # Vykreslenie hraníc parcele
-                folium.GeoJson(
-                    row['geometry'],
-                    style_function=lambda x: {
-                        'fillColor': color,
-                        'color': 'black',
-                        'weight': 1,
-                        'fillOpacity': 0.3
-                    },
-                    popup=folium.Popup(f"""
-                    <b>{row['name']}</b><br>
-                    Priemerný výnos: {row['avg_yield_percentage']:.1f}%<br>
-                    Plocha: {row['area']:.2f} ha<br>
-                    Počet plodín: {row['crop_count']}
-                    """, max_width=300)
-                ).add_to(m)
-                
-            except Exception as e:
-                continue
+        fig.update_layout(
+            height=600,
+            margin={"r":0,"t":30,"l":0,"b":0}
+        )
         
-        return m
+        return fig
         
     except Exception as e:
         st.error(f"Chyba pri vytváraní mapy: {e}")
         return None
 
-def show_enterprise_statistics(df):
+def show_enterprise_statistics(df, selected_crop):
     """Zobrazenie štatistík na úrovni podniku"""
-    # Sidebar
-    st.sidebar.header("Nastavenia")
-    
-    # Výber plodiny v sidebar
-    available_crops = sorted(df['crop'].unique())
-    default_crop = "PŠENICE OZ" if "PŠENICE OZ" in available_crops else available_crops[0]
-    selected_crop = st.sidebar.selectbox("Vyberte plodinu:", available_crops, index=available_crops.index(default_crop))
-    
     # Základné štatistiky
     st.header("📊 Prehľad dát")
     
@@ -194,21 +170,6 @@ def show_enterprise_statistics(df):
     
     if selected_crop:
         crop_data = df[df['crop'] == selected_crop]
-        
-        # Štatistiky pre vybranú plodinu
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            avg_yield = crop_data['yield_ha'].mean()
-            st.metric(f"Priemerný výnos {selected_crop}", f"{avg_yield:.2f} t/ha")
-        
-        with col2:
-            total_area = crop_data['area'].sum()
-            st.metric("Celková plocha", f"{total_area:.1f} ha")
-        
-        with col3:
-            avg_percentage = crop_data['yield_percentage'].mean()
-            st.metric("Priemerná výnosnosť", f"{avg_percentage:.1f}%")
         
         # Grafy pre vybranú plodinu
         col1, col2 = st.columns(2)
@@ -255,16 +216,15 @@ def show_enterprise_statistics(df):
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
     
-    # Mapa parciel
+    # Mapa parciel - zobrazuje sa automaticky pomocou geopandas
     st.header("🗺️ Mapa parciel")
     
-    if st.button("Zobraziť mapu"):
-        with st.spinner("Generujem mapu..."):
-            map_fig = create_parcel_performance_map(df)
-            if map_fig:
-                st_folium(map_fig, width=800, height=600)
-            else:
-                st.warning("Nepodarilo sa vytvoriť mapu. Skontrolujte geometrické dáta.")
+    with st.spinner("Generujem mapu pomocou geopandas..."):
+        map_fig = create_parcel_performance_map(df)
+        if map_fig:
+            st.plotly_chart(map_fig, use_container_width=True)
+        else:
+            st.warning("Nepodarilo sa vytvoriť mapu. Skontrolujte geometrické dáta.")
     
     # Štatistická analýza
     st.header("🔬 Štatistická analýza")
