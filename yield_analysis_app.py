@@ -182,7 +182,7 @@ def create_yield_trend(df, crop_name):
         title=f"Trend výnosov {crop_name} v čase",
         xaxis_title="Rok",
         yaxis_title="Výnos (t/ha)",
-        height=500
+        height=400
     )
     
     return fig
@@ -207,19 +207,18 @@ def create_parcel_performance_map(df):
         
         # Konverzia na GeoDataFrame
         parcel_stats['geometry'] = parcel_stats['geometry'].apply(wkt.loads)
-        gdf = gpd.GeoDataFrame(parcel_stats, geometry='geometry', crs='EPSG:4326')
+        gdf = gpd.GeoDataFrame(parcel_stats, geometry='geometry')
         
-        # Vytvorenie mapy pomocou folium
+        # Nastavenie CRS na WGS84
+        gdf.set_crs(epsg=4326, inplace=True)
+        
+        # Vytvorenie mapy - centrum Slovenska
         center_lat, center_lon = 48.6690, 19.6990
         m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
         
         # Pridanie parciel na mapu
         for idx, row in gdf.iterrows():
             try:
-                # Výpočet centroidu pre zobrazenie
-                centroid = row.geometry.centroid
-                lat, lon = centroid.y, centroid.x
-                
                 # Farba podľa výkonnosti
                 if row['avg_yield_percentage'] < 80:
                     color = 'red'
@@ -228,36 +227,21 @@ def create_parcel_performance_map(df):
                 else:
                     color = 'green'
                 
-                # Veľkosť bodu podľa plochy
-                radius = min(max(row['area'] / 10, 5), 20)
-                
-                folium.CircleMarker(
-                    location=[lat, lon],
-                    radius=radius,
-                    popup=folium.Popup(
-                        f"""
-                        <b>{row['name']}</b><br>
-                        Priemerný výnos: {row['avg_yield_percentage']:.1f}%<br>
-                        Plocha: {row['area']:.2f} ha<br>
-                        Počet plodín: {row['crop_count']}
-                        """,
-                        max_width=300
-                    ),
-                    color=color,
-                    fill=True,
-                    fillOpacity=0.7,
-                    weight=2
-                ).add_to(m)
-                
-                # Pridanie hraníc parcele
+                # Vykreslenie hraníc parcele
                 folium.GeoJson(
-                    row.geometry,
+                    row['geometry'],
                     style_function=lambda x: {
                         'fillColor': color,
-                        'color': color,
+                        'color': 'black',
                         'weight': 1,
-                        'fillOpacity': 0.1
-                    }
+                        'fillOpacity': 0.3
+                    },
+                    popup=folium.Popup(f"""
+                    <b>{row['name']}</b><br>
+                    Priemerný výnos: {row['avg_yield_percentage']:.1f}%<br>
+                    Plocha: {row['area']:.2f} ha<br>
+                    Počet plodín: {row['crop_count']}
+                    """, max_width=300)
                 ).add_to(m)
                 
             except Exception as e:
@@ -288,7 +272,7 @@ def main():
     
     # Výber plodiny v sidebar
     available_crops = sorted(df['crop'].unique())
-    default_crop = "PŠENICA OZ" if "PŠENICA OZ" in available_crops else available_crops[0]
+    default_crop = "PŠENICE OZ" if "PŠENICE OZ" in available_crops else available_crops[0]
     selected_crop = st.sidebar.selectbox("Vyberte plodinu:", available_crops, index=available_crops.index(default_crop))
     
     # Základné štatistiky
@@ -308,7 +292,7 @@ def main():
     with col4:
         st.metric("Obdobie", f"{df['year'].min()} - {df['year'].max()}")
     
-    # Analýza podľa plodiny
+    # Analýza vybranej plodiny
     st.header(f"🌱 Analýza plodiny: {selected_crop}")
     
     if selected_crop:
@@ -329,60 +313,50 @@ def main():
             avg_percentage = crop_data['yield_percentage'].mean()
             st.metric("Priemerná výnosnosť", f"{avg_percentage:.1f}%")
         
-        # Graf variabilita výnosov - na celú šírku
-        st.subheader("📊 Variabilita výnosov")
-        boxplot_fig = create_yield_boxplot(df, selected_crop)
-        if boxplot_fig:
-            st.plotly_chart(boxplot_fig, use_container_width=True)
+        # Grafy pre vybranú plodinu
+        col1, col2 = st.columns(2)
         
-        # Graf trend výnosov - na celú šírku
-        st.subheader("📈 Trend výnosov v čase")
-        trend_fig = create_yield_trend(df, selected_crop)
-        if trend_fig:
-            st.plotly_chart(trend_fig, use_container_width=True)
+        with col1:
+            boxplot_fig = create_yield_boxplot(df, selected_crop)
+            if boxplot_fig:
+                st.plotly_chart(boxplot_fig, use_container_width=True)
+        
+        with col2:
+            trend_fig = create_yield_trend(df, selected_crop)
+            if trend_fig:
+                st.plotly_chart(trend_fig, use_container_width=True)
     
     # Analýza výkonnosti parciel
     st.header("🏆 Výkonnosť parciel")
     
-    # Top parcele podľa výnosnosti - vylepšený graf
-    st.subheader("Top 10 parciel podľa výnosnosti")
-    top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
+    # Top parcele podľa výnosnosti
+    col1, col2 = st.columns(2)
     
-    # Vylepšený graf s lepšími farbami a formátovaním
-    fig = go.Figure()
+    with col1:
+        st.subheader("Top 10 parciel podľa výnosnosti")
+        top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
+        
+        fig = px.bar(
+            x=top_parcels.values,
+            y=top_parcels.index,
+            orientation='h',
+            title="Top parcele podľa priemernej výnosnosti (%)"
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
     
-    # Farba podľa výkonnosti
-    colors = ['green' if x >= 100 else 'orange' if x >= 80 else 'red' for x in top_parcels.values]
-    
-    fig.add_trace(go.Bar(
-        x=top_parcels.values,
-        y=top_parcels.index,
-        orientation='h',
-        marker_color=colors,
-        text=[f"{x:.1f}%" for x in top_parcels.values],
-        textposition='auto',
-        hovertemplate='<b>%{y}</b><br>Výnosnosť: %{x:.1f}%<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title="Top 10 parciel podľa priemernej výnosnosti",
-        xaxis_title="Výnosnosť (%)",
-        yaxis_title="Názov parcele",
-        height=500,
-        showlegend=False,
-        xaxis=dict(range=[0, max(top_parcels.values) * 1.1]),
-        yaxis=dict(autorange='reversed')
-    )
-    
-    # Pridanie čiary priemeru
-    fig.add_vline(
-        x=100,
-        line_dash="dash",
-        line_color="blue",
-        annotation_text="Priemer (100%)"
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    with col2:
+        st.subheader("Najhoršie parcele")
+        worst_parcels = df.groupby('name')['yield_percentage'].mean().sort_values().head(10)
+        
+        fig = px.bar(
+            x=worst_parcels.values,
+            y=worst_parcels.index,
+            orientation='h',
+            title="Najhoršie parcele podľa priemernej výnosnosti (%)"
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
     
     # Mapa parciel
     st.header("🗺️ Mapa parciel")
@@ -394,6 +368,40 @@ def main():
                 st_folium(map_fig, width=800, height=600)
             else:
                 st.warning("Nepodarilo sa vytvoriť mapu. Skontrolujte geometrické dáta.")
+    
+    # Štatistická analýza
+    st.header("🔬 Štatistická analýza")
+    
+    # ANOVA test pre porovnanie plodín
+    if st.checkbox("Zobraziť štatistické testy"):
+        from scipy import stats
+        
+        # Filtrovanie plodín s dostatočnými dátami
+        crop_counts = df['crop'].value_counts()
+        valid_crops = crop_counts[crop_counts >= 5].index
+        
+        if len(valid_crops) >= 2:
+            # ANOVA test
+            crop_groups = [df[df['crop'] == crop]['yield_ha'].values for crop in valid_crops]
+            
+            try:
+                f_stat, p_value = stats.f_oneway(*crop_groups)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.metric("F-štatistika", f"{f_stat:.4f}")
+                
+                with col2:
+                    st.metric("P-hodnota", f"{p_value:.4f}")
+                
+                if p_value < 0.05:
+                    st.success("Existuje štatisticky významný rozdiel medzi výnosmi plodín (p < 0.05)")
+                else:
+                    st.info("Nie je štatisticky významný rozdiel medzi výnosmi plodín (p ≥ 0.05)")
+                
+            except Exception as e:
+                st.warning(f"Nepodarilo sa vykonať štatistický test: {e}")
     
     # Export dát
     st.header("💾 Export dát")
