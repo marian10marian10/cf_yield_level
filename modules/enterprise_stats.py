@@ -218,7 +218,7 @@ def show_enterprise_statistics(df, selected_crop):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("🏆 Top 10 parciel podľa výnosnosti")
+        st.subheader("📊 Top 10 parciel podľa výnosnosti")
         top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
         
         # Vytvorenie atraktívneho grafu s gradientom farieb
@@ -288,30 +288,9 @@ def show_enterprise_statistics(df, selected_crop):
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    # Pridanie informatívneho textu o metodike
+    # Kompaktné vysvetlenie metodiky priamo pod grafmi
     st.markdown("---")
-    st.subheader("📚 Vysvetlenie metodiky výpočtu percent")
-    
-    st.markdown("""
-    **Ako sa počítajú percentá výnosnosti:**
-    
-    Percentá výnosnosti sa počítajú ako pomer skutočného výnosu parcely k referenčnému výnosu pre danú plodinu a rok.
-    
-    **Vzorec:** `Výnosnosť (%) = (Skutočný výnos / Referenčný výnos) × 100`
-    
-    **Interpretácia:**
-    - **100%** = Parcela dosiahla presne referenčný výnos
-    - **>100%** = Parcela prekročila referenčný výnos (výborná výkonnosť)
-    - **<100%** = Parcela nedosiahla referenčný výnos (potrebuje zlepšenie)
-    
-    **Referenčné výnosy** sú stanovené na základe:
-    - Historických dát z oblasti
-    - Pôdnych podmienok
-    - Klimatických podmienok
-    - Agrotechnických postupov
-    
-    **Poznámka:** Percentá sú priemerované za všetky roky a plodiny pre každú parcelu.
-    """)
+    st.markdown("**📊 Metodika:** Percentá = (Skutočný výnos / Priemerný výnos) × 100. Priemerný výnos sa počíta ako aritmetický priemer všetkých parciel pre danú plodinu a rok. 100% = priemer, >100% = nadpriemer, <100% = podpriemer.")
     
     # Mapa parciel - zobrazuje sa automaticky pomocou geopandas
     st.header("🗺️ Mapa parciel")
