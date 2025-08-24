@@ -291,8 +291,8 @@ def show_parcel_statistics(df):
         else:
             st.warning("Nepodarilo sa vytvoriť mapu parcely.")
     
-    # Štatistická analýza parcely
-    st.subheader("🔬 Štatistická analýza parcely")
+    # Základné metriky parcely
+    st.subheader("📊 Základné metriky parcely")
     
     col1, col2 = st.columns(2)
     

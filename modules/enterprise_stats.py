@@ -89,7 +89,14 @@ def create_yield_trend(df, crop_name):
         title=f"Trend výnosov {crop_name} v čase",
         xaxis_title="Rok",
         yaxis_title="Výnos (t/ha)",
-        height=400
+        height=400,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        )
     )
     
     return fig
@@ -129,15 +136,15 @@ def create_parcel_performance_map(df):
         lat_range = bounds[3] - bounds[1]
         max_range = max(lon_range, lat_range)
         
-        # Nastavenie zoom levelu na základe veľkosti oblasti
+        # Nastavenie zoom levelu na základe veľkosti oblasti - zvýšené pre lepší detail
         if max_range > 5:  # Veľká oblasť (celé Slovensko)
-            zoom_level = 6
-        elif max_range > 1:  # Stredná oblasť (kraj)
             zoom_level = 8
-        elif max_range > 0.1:  # Malá oblasť (okres)
+        elif max_range > 1:  # Stredná oblasť (kraj)
             zoom_level = 10
-        else:  # Veľmi malá oblasť (obec)
+        elif max_range > 0.1:  # Malá oblasť (okres)
             zoom_level = 12
+        else:  # Veľmi malá oblasť (obec)
+            zoom_level = 14
         
         # Vytvorenie mapy pomocou geopandas a plotly
         fig = px.choropleth_mapbox(
@@ -211,30 +218,91 @@ def show_enterprise_statistics(df, selected_crop):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Top 10 parciel podľa výnosnosti")
+        st.subheader("🏆 Top 10 parciel podľa výnosnosti")
         top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
         
-        fig = px.bar(
+        # Vytvorenie atraktívneho grafu s gradientom farieb
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
             x=top_parcels.values,
             y=top_parcels.index,
             orientation='h',
-            title="Top parcele podľa priemernej výnosnosti (%)"
+            marker=dict(
+                color=top_parcels.values,
+                colorscale='Greens',
+                showscale=True,
+                colorbar=dict(title="Výnosnosť (%)")
+            ),
+            text=[f"{val:.1f}%" for val in top_parcels.values],
+            textposition='auto'
+        ))
+        
+        fig.update_layout(
+            title="Top parcele podľa priemernej výnosnosti (%)",
+            height=400,
+            xaxis_title="Výnosnosť (%)",
+            yaxis_title="Parcela",
+            showlegend=False,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
-        fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.subheader("Najhoršie parcele")
+        st.subheader("📉 Najhoršie parcele")
         worst_parcels = df.groupby('name')['yield_percentage'].mean().sort_values().head(10)
         
-        fig = px.bar(
+        # Vytvorenie atraktívneho grafu s gradientom farieb
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
             x=worst_parcels.values,
             y=worst_parcels.index,
             orientation='h',
-            title="Najhoršie parcele podľa priemernej výnosnosti (%)"
+            marker=dict(
+                color=worst_parcels.values,
+                colorscale='Reds',
+                showscale=True,
+                colorbar=dict(title="Výnosnosť (%)")
+            ),
+            text=[f"{val:.1f}%" for val in worst_parcels.values],
+            textposition='auto'
+        ))
+        
+        fig.update_layout(
+            title="Najhoršie parcele podľa priemernej výnosnosti (%)",
+            height=400,
+            xaxis_title="Výnosnosť (%)",
+            yaxis_title="Parcela",
+            showlegend=False,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
-        fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
+    
+    # Pridanie informatívneho textu o metodike
+    st.markdown("---")
+    st.subheader("📚 Vysvetlenie metodiky výpočtu percent")
+    
+    st.markdown("""
+    **Ako sa počítajú percentá výnosnosti:**
+    
+    Percentá výnosnosti sa počítajú ako pomer skutočného výnosu parcely k referenčnému výnosu pre danú plodinu a rok.
+    
+    **Vzorec:** `Výnosnosť (%) = (Skutočný výnos / Referenčný výnos) × 100`
+    
+    **Interpretácia:**
+    - **100%** = Parcela dosiahla presne referenčný výnos
+    - **>100%** = Parcela prekročila referenčný výnos (výborná výkonnosť)
+    - **<100%** = Parcela nedosiahla referenčný výnos (potrebuje zlepšenie)
+    
+    **Referenčné výnosy** sú stanovené na základe:
+    - Historických dát z oblasti
+    - Pôdnych podmienok
+    - Klimatických podmienok
+    - Agrotechnických postupov
+    
+    **Poznámka:** Percentá sú priemerované za všetky roky a plodiny pre každú parcelu.
+    """)
     
     # Mapa parciel - zobrazuje sa automaticky pomocou geopandas
     st.header("🗺️ Mapa parciel")
@@ -245,40 +313,6 @@ def show_enterprise_statistics(df, selected_crop):
             st.plotly_chart(map_fig, use_container_width=True)
         else:
             st.warning("Nepodarilo sa vytvoriť mapu. Skontrolujte geometrické dáta.")
-    
-    # Štatistická analýza
-    st.header("🔬 Štatistická analýza")
-    
-    # ANOVA test pre porovnanie plodín
-    if st.checkbox("Zobraziť štatistické testy"):
-        from scipy import stats
-        
-        # Filtrovanie plodín s dostatočnými dátami
-        crop_counts = df['crop'].value_counts()
-        valid_crops = crop_counts[crop_counts >= 5].index
-        
-        if len(valid_crops) >= 2:
-            # ANOVA test
-            crop_groups = [df[df['crop'] == crop]['yield_ha'].values for crop in valid_crops]
-            
-            try:
-                f_stat, p_value = stats.f_oneway(*crop_groups)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.metric("F-štatistika", f"{f_stat:.4f}")
-                
-                with col2:
-                    st.metric("P-hodnota", f"{p_value:.4f}")
-                
-                if p_value < 0.05:
-                    st.success("Existuje štatisticky významný rozdiel medzi výnosmi plodín (p < 0.05)")
-                else:
-                    st.info("Nie je štatisticky významný rozdiel medzi výnosmi plodín (p ≥ 0.05)")
-                
-            except Exception as e:
-                st.warning(f"Nepodarilo sa vykonať štatistický test: {e}")
     
     # Export dát
     st.header("💾 Export dát")
