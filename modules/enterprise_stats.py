@@ -315,8 +315,20 @@ def show_enterprise_statistics(df, selected_crop):
         st.subheader("📊 Top 10 parciel podľa výnosnosti")
         top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
         
-        # Vytvorenie atraktívneho grafu s gradientom farieb
+        # Vytvorenie atraktívneho grafu s gradientom farieb a detailnými tooltipmi
         # Zoradenie parciel od najvyššieho percenta (hore) po najnižšie (dole)
+        
+        # Príprava detailných tooltipov pre každú parcelu
+        tooltip_data = []
+        for parcel_name in top_parcels.index:
+            parcel_data = df[df['name'] == parcel_name]
+            yearly_percentages = parcel_data.groupby('year')['yield_percentage'].mean().round(1)
+            yearly_info = []
+            for year, percentage in yearly_percentages.items():
+                yearly_info.append(f"{year}: {percentage}%")
+            yearly_text = "<br>".join(yearly_info)
+            tooltip_data.append(yearly_text)
+        
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=top_parcels.values,
@@ -329,7 +341,13 @@ def show_enterprise_statistics(df, selected_crop):
                 colorbar=dict(title="Výnosnosť (%)")
             ),
             text=[f"{val:.1f}%" for val in top_parcels.values],
-            textposition='auto'
+            textposition='auto',
+            hovertemplate="<b>%{y}</b><br>" +
+                         "Celková výnosnosť: %{x:.1f}%<br>" +
+                         "<b>Výnosnosť po rokoch:</b><br>" +
+                         "%{customdata}<br>" +
+                         "<extra></extra>",
+            customdata=tooltip_data
         ))
         
         # Nastavenie y-axis v opačnom poradí - najvyššie percento bude hore
@@ -351,9 +369,21 @@ def show_enterprise_statistics(df, selected_crop):
         st.subheader("📉 Najhoršie parcele")
         worst_parcels = df.groupby('name')['yield_percentage'].mean().sort_values().head(10)
         
-        # Vytvorenie atraktívneho grafu s gradientom farieb
+        # Vytvorenie atraktívneho grafu s gradientom farieb a detailnými tooltipmi
         # Zoradenie parciel od najvyššieho percenta (hore) po najnižšie (dole)
         # Najnižšie percento bude na spodku grafu s najsýtejšou červenou
+        
+        # Príprava detailných tooltipov pre každú parcelu
+        tooltip_data_worst = []
+        for parcel_name in worst_parcels.index:
+            parcel_data = df[df['name'] == parcel_name]
+            yearly_percentages = parcel_data.groupby('year')['yield_percentage'].mean().round(1)
+            yearly_info = []
+            for year, percentage in yearly_percentages.items():
+                yearly_info.append(f"{year}: {percentage}%")
+            yearly_text = "<br>".join(yearly_info)
+            tooltip_data_worst.append(yearly_text)
+        
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=worst_parcels.values,
@@ -366,7 +396,13 @@ def show_enterprise_statistics(df, selected_crop):
                 colorbar=dict(title="Výnosnosť (%)")
             ),
             text=[f"{val:.1f}%" for val in worst_parcels.values],
-            textposition='auto'
+            textposition='auto',
+            hovertemplate="<b>%{y}</b><br>" +
+                         "Celková výnosnosť: %{x:.1f}%<br>" +
+                         "<b>Výnosnosť po rokoch:</b><br>" +
+                         "%{customdata}<br>" +
+                         "<extra></extra>",
+            customdata=tooltip_data_worst
         ))
         
         # Nastavenie y-axis - najvyššie percento bude hore, najnižšie dole
