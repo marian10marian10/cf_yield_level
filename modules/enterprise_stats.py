@@ -252,66 +252,7 @@ def create_parcel_performance_map(df):
             )
         ).add_to(m)
         
-        # Pridanie legendy s jemnejším farebným škálovaním
-        legend_html = f'''
-        <div style="position: fixed; 
-                    bottom: 50px; left: 50px; width: 320px; height: 200px; 
-                    background-color: white; border:2px solid grey; z-index:9999; 
-                    font-size:14px; padding: 10px; border-radius: 5px;">
-        <h4>🎨 Jemné farebné škálovanie výnosnosti:</h4>
-        <div style="display: flex; align-items: center; margin: 5px 0;">
-            <div style="width: 200px; height: 20px; background: linear-gradient(to right, #dc6432, #e6b32a, #32cd32); border: 1px solid #000;"></div>
-            <div style="margin-left: 10px; font-size: 12px;">
-                <div>🔴 {min_yield:.1f}% (najnižšia)</div>
-                <div>🟢 {max_yield:.1f}% (najvyššia)</div>
-            </div>
-        </div>
-        <p><strong>Vysvetlenie:</strong></p>
-        <p>• <span style="color:#dc6432;">Jemná červená</span> = najnižšia výnosnosť</p>
-        <p>• <span style="color:#e6b32a;">Jemná oranžová/žltá</span> = stredná výnosnosť</p>
-        <p>• <span style="color:#32cd32;">Jemná zelená</span> = najvyššia výnosnosť</p>
-        <p><em>Každá parcela má unikátnu jemnú farbu podľa presnej hodnoty</em></p>
-        </div>
-        '''
-        m.get_root().html.add_child(folium.Element(legend_html))
-        
-        # Pridanie detailných štatistík
-        total_parcels = len(parcel_stats)
-        avg_performance = parcel_stats['avg_yield_percentage'].mean()
-        best_parcel = parcel_stats.loc[parcel_stats['avg_yield_percentage'].idxmax()]
-        worst_parcel = parcel_stats.loc[parcel_stats['avg_yield_percentage'].idxmin()]
-        
-        stats_html = f'''
-        <div style="position: fixed; 
-                    top: 50px; left: 50px; width: 300px; height: 200px; 
-                    background-color: white; border:2px solid grey; z-index:9999; 
-                    font-size:14px; padding: 10px; border-radius: 5px;">
-        <h4>📊 Prehľad všetkých parciel:</h4>
-        <p>Celkový počet: {total_parcels}</p>
-        <p>Priemerná výnosnosť: {avg_performance:.1f}%</p>
-        <p>Rozsah rokov: {parcel_stats['year_min'].min()} - {parcel_stats['year_max'].max()}</p>
-        <p>Celková plocha: {parcel_stats['area'].sum():.1f} ha</p>
-        <h4>🏆 Najlepšia parcela:</h4>
-        <p>{best_parcel['name']}: {best_parcel['avg_yield_percentage']:.1f}%</p>
-        <h4>⚠️ Najhoršia parcela:</h4>
-        <p>{worst_parcel['name']}: {worst_parcel['avg_yield_percentage']:.1f}%</p>
-        </div>
-        '''
-        m.get_root().html.add_child(folium.Element(stats_html))
-        
-        # Pridanie súradníc oblasti
-        coords_html = f'''
-        <div style="position: fixed; 
-                    top: 50px; right: 50px; width: 250px; height: 150px; 
-                    background-color: white; border:2px solid grey; z-index:9999; 
-                    font-size:14px; padding: 10px; border-radius: 5px;">
-        <h4>📍 Súradnice oblasti:</h4>
-        <p>Stred: {center_lat:.6f}°N, {center_lon:.6f}°E</p>
-        <p>Rozmer: {lon_range:.6f}° × {lat_range:.6f}°</p>
-        <p>Zoom: 10</p>
-        </div>
-        '''
-        m.get_root().html.add_child(folium.Element(coords_html))
+
         
         # Pridanie fullscreen tlačidla
         plugins.Fullscreen().add_to(m)
@@ -463,19 +404,7 @@ def show_enterprise_statistics(df, selected_crop):
             folium_static = map_fig._repr_html_()
             st.components.v1.html(folium_static, height=700)
             
-            # Pridanie informácií o mape
-            st.success("""
-            **🎯 Datová mapa s mriežkou obsahuje:**
-            - Jemné farebné kódovanie od červenej cez oranžovú a žltú po zelenú podľa presnej výnosnosti
-            - Ešte bližšie zazoomovanie na všetky polygony
-            - Mriežku pre presné určenie polohy
-            - Detailné štatistiky všetkých parciel
-            - Informácie o najlepšej a najhoršej parcele
-            - Súradnice oblasti a rozmerov
-            - Čistý, datový vzhľad bez satelitného pozadia
-            - Interaktívne tooltips pre každú parcelu
-            - Fullscreen režim a minimapu
-            """)
+
         else:
             st.warning("Nepodarilo sa vytvoriť datovú mapu. Skontrolujte geometrické dáta.")
     
