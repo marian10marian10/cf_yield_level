@@ -222,6 +222,7 @@ def show_enterprise_statistics(df, selected_crop):
         top_parcels = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False).head(10)
         
         # Vytvorenie atraktívneho grafu s gradientom farieb
+        # Zoradenie parciel od najvyššieho percenta (hore) po najnižšie (dole)
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=top_parcels.values,
@@ -237,6 +238,7 @@ def show_enterprise_statistics(df, selected_crop):
             textposition='auto'
         ))
         
+        # Nastavenie y-axis v opačnom poradí - najvyššie percento bude hore
         fig.update_layout(
             title="Top parcele podľa priemernej výnosnosti (%)",
             height=400,
@@ -244,7 +246,10 @@ def show_enterprise_statistics(df, selected_crop):
             yaxis_title="Parcela",
             showlegend=False,
             plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(
+                autorange='reversed'  # Obráti poradie - najvyššie percento bude hore
+            )
         )
         st.plotly_chart(fig, use_container_width=True)
     
@@ -253,6 +258,7 @@ def show_enterprise_statistics(df, selected_crop):
         worst_parcels = df.groupby('name')['yield_percentage'].mean().sort_values().head(10)
         
         # Vytvorenie atraktívneho grafu s gradientom farieb
+        # Zoradenie parciel od najnižšieho percenta (hore) po najvyššie (dole)
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=worst_parcels.values,
@@ -268,6 +274,7 @@ def show_enterprise_statistics(df, selected_crop):
             textposition='auto'
         ))
         
+        # Nastavenie y-axis v opačnom poradí - najnižšie percento bude hore
         fig.update_layout(
             title="Najhoršie parcele podľa priemernej výnosnosti (%)",
             height=400,
@@ -275,7 +282,10 @@ def show_enterprise_statistics(df, selected_crop):
             yaxis_title="Parcela",
             showlegend=False,
             plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(
+                autorange='reversed'  # Obráti poradie - najnižšie percento bude hore
+            )
         )
         st.plotly_chart(fig, use_container_width=True)
     
