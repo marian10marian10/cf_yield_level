@@ -176,47 +176,7 @@ def create_parcel_performance_map(df):
         return None
 
 def show_enterprise_statistics(df, selected_crop):
-    """Zobrazenie štatistík na úrovni podniku"""
-    # Základné štatistiky
-    st.header("📊 Prehľad dát")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Celkový počet záznamov", f"{len(df):,}")
-    
-    with col2:
-        st.metric("Počet parciel", f"{df['agev_parcel_id'].nunique():,}")
-    
-    with col3:
-        st.metric("Počet plodín", f"{df['crop'].nunique()}")
-    
-    with col4:
-        st.metric("Obdobie", f"{df['year'].min()} - {df['year'].max()}")
-    
-    # Analýza vybranej plodiny
-    st.header(f"🌱 Analýza plodiny: {selected_crop}")
-    
-    if selected_crop:
-        crop_data = df[df['crop'] == selected_crop]
-        
-        # Základné štatistiky pre vybranú plodinu
-        st.subheader("📊 Základné štatistiky")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Počet záznamov", f"{len(crop_data):,}")
-        
-        with col2:
-            st.metric("Počet parciel", f"{crop_data['agev_parcel_id'].nunique():,}")
-        
-        with col3:
-            st.metric("Priemerný výnos", f"{crop_data['yield_ha'].mean():.2f} t/ha")
-        
-        with col4:
-            st.metric("Obdobie", f"{crop_data['year'].min()} - {crop_data['year'].max()}")
-    
+    """Zobrazenie štatistik na úrovni podniku"""
     # Analýza výkonnosti parciel
     st.header("🏆 Výkonnosť parciel")
     
