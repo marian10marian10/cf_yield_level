@@ -876,7 +876,7 @@ def create_all_parcels_map(df):
                     bottom: 10px; left: 10px; width: 350px; height: auto; 
                     background-color: white; border:2px solid rgba(0,0,0,0.3); z-index:9999; 
                     font-size:11px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
-            <h4>🏆 Najlepšia parcela: {best_parcel['name']}</h4>
+                         <h4>📊 Najlepšia parcela: {best_parcel['name']}</h4>
             <p>Výnosnosť: {best_parcel['avg_yield_percentage']:.1f}%</p>
             <h4>⚠️ Najhoršia parcela: {worst_parcel['name']}</h4>
             <p>Výnosnosť: {worst_parcel['avg_yield_percentage']:.1f}%</p>
@@ -988,14 +988,11 @@ def show_parcel_statistics(df, selected_parcel):
     
     # Informácie o vybranej parcieli
     if not parcel_data.empty:
-        col1, col2, col3 = st.columns([2, 2, 1])
+        col1, col2 = st.columns(2)
         with col1:
             st.info(f"**Parcela:** {selected_parcel}")
         with col2:
             st.info(f"**Výnosnosť:** {parcel_data['yield_percentage'].mean():.1f}%")
-        with col3:
-            if st.button("📊 Exportovať mapu", key="export_parcel_map"):
-                st.info("Funkcia exportu mapy bude implementovaná v ďalšej verzii.")
     
     with st.spinner("Generujem datovú mapu parcely s mriežkou..."):
         if map_type == "Datová mapa s mriežkou (odporúčané)":
@@ -1009,17 +1006,7 @@ def show_parcel_statistics(df, selected_parcel):
             st.components.v1.html(folium_static, height=700)
             
             # Pridanie informácií o mape
-            if map_type == "Datová mapa s mriežkou (odporúčané)":
-                st.success("""
-                **🎯 Datová mapa s mriežkou obsahuje:**
-                - Farebné kódovanie podľa výnosnosti parcely s hodnotením A+ až D
-                - Detailné informácie o parcieli a štatistiky
-                - Mriežku pre presné určenie polohy
-                - Súradnice parcely a rozmerov
-                - Variabilitu výnosov a trendové údaje
-                - Čistý, datový vzhľad bez satelitného pozadia
-                """)
-            else:
+            if map_type == "Základná mapa":
                 st.info("Základná mapa zobrazuje parcela s minimálnymi informáciami.")
         else:
             st.warning("Nepodarilo sa vytvoriť mapu parcely. Skontrolujte, či sú dostupné geometrické dáta.")

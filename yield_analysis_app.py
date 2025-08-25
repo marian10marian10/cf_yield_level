@@ -112,19 +112,7 @@ def main():
     
     # Zobrazenie obsahu podľa vybranej karty
     if st.session_state.active_tab == "enterprise":
-        # Filter pre plodinu na karte podniku
-        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-        st.subheader("🔍 Filtre")
-        selected_crop = st.selectbox(
-            "Vyberte plodinu:", 
-            available_crops, 
-            index=available_crops.index(st.session_state.selected_crop),
-            key="enterprise_crop_selector"
-        )
-        st.session_state.selected_crop = selected_crop
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        show_enterprise_statistics(df, selected_crop)
+        show_enterprise_statistics(df, st.session_state.selected_crop)
         
     elif st.session_state.active_tab == "crop":
         # Filter pre plodinu na karte plodiny
