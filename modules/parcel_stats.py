@@ -43,7 +43,7 @@ def create_parcel_yield_timeline(df, parcel_name):
     return fig
 
 def create_parcel_crop_comparison(df, parcel_name):
-    """Porovnanie plodín na konkrétnej parcele"""
+    """Porovnanie plodín na konkrétnej parcieli"""
     parcel_data = df[df['name'].astype(str) == parcel_name].copy()
     
     if parcel_data.empty:
@@ -77,7 +77,7 @@ def create_parcel_crop_comparison(df, parcel_name):
     ))
     
     fig.update_layout(
-        title=f"Porovnanie plodín na parcele {parcel_name}",
+        title=f"Porovnanie plodín na parcieli {parcel_name}",
         xaxis_title="Plodina",
         yaxis=dict(title="Výnos (t/ha)", side="left"),
         yaxis2=dict(title="Výnosnosť (%)", side="right", overlaying="y"),
@@ -535,7 +535,7 @@ def create_all_parcels_map(df):
         if parcels_with_geometry.empty:
             return None
         
-        # Agregácia dát podľa parcele s detailnými metrikami
+        # Agregácia dát podľa parciel s detailnými metrikami
         parcel_stats = parcels_with_geometry.groupby('name').agg({
             'yield_percentage': ['mean', 'std', 'min', 'max'],
             'yield_ha': ['mean', 'std', 'min', 'max'],
@@ -564,7 +564,7 @@ def create_all_parcels_map(df):
         if not all_geometries:
             return None
         
-        # Vytvorenie GeoDataFrame pre všetky parcele
+        # Vytvorenie GeoDataFrame pre všetky parcely
         gdf = gpd.GeoDataFrame(parcel_stats)
         gdf['geometry'] = all_geometries[:len(parcel_stats)]
         gdf.set_crs(epsg=4326, inplace=True)
@@ -755,7 +755,7 @@ def create_all_parcels_map(df):
         """
         m.get_root().html.add_child(folium.Element(stats_html))
         
-        # Pridanie informácií o najlepšej a najhoršej parcele
+        # Pridanie informácií o najlepšej a najhoršej parcieli
         best_worst_html = f"""
         <div style="position: fixed; 
                     bottom: 10px; left: 10px; width: 350px; height: auto; 
@@ -804,7 +804,7 @@ def show_parcel_statistics(df):
     available_parcels = sorted([str(parcel) for parcel in df['name'].unique() if pd.notna(parcel)])
     
     if not available_parcels:
-        st.error("Nie sú dostupné žiadne parcele.")
+        st.error("Nie sú dostupné žiadne parcely.")
         return
     
     # Výber parcely
@@ -826,8 +826,8 @@ def show_parcel_statistics(df):
         st.error(f"Pre parcelu {selected_parcel} nie sú dostupné žiadne dáta.")
         return
     
-    # Základné informácie o parcele
-    st.subheader(f"📋 Informácie o parcele: {selected_parcel}")
+            # Základné informácie o parcieli
+        st.subheader(f"📋 Informácie o parcieli: {selected_parcel}")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -881,7 +881,7 @@ def show_parcel_statistics(df):
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.info("Táto datová mapa zobrazuje všetky parcele s mriežkou, farebným kódovaním podľa výnosnosti a detailnými štatistikami. Zelené parcele majú vyššiu výnosnosť, červené nižšiu.")
+        st.info("Táto datová mapa zobrazuje všetky parcely s mriežkou, farebným kódovaním podľa výnosnosti a detailnými štatistikami. Zelené parcely majú vyššiu výnosnosť, červené nižšiu.")
     
     with col2:
         if st.button("📊 Exportovať mapu", key="export_all_parcels_map"):
@@ -922,7 +922,7 @@ def show_parcel_statistics(df):
         key="map_type_selector"
     )
     
-    # Informácie o vybranej parcele
+            # Informácie o vybranej parcieli
     if not parcel_data.empty:
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
@@ -949,7 +949,7 @@ def show_parcel_statistics(df):
                 st.success("""
                 **🎯 Datová mapa s mriežkou obsahuje:**
                 - Farebné kódovanie podľa výnosnosti parcely s hodnotením A+ až D
-                - Detailné informácie o parcele a štatistiky
+                - Detailné informácie o parcieli a štatistiky
                 - Mriežku pre presné určenie polohy
                 - Súradnice parcely a rozmerov
                 - Variabilitu výnosov a trendové údaje

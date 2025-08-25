@@ -15,7 +15,7 @@ def create_parcel_performance_map(df):
         import folium
         from folium import plugins
         
-        # Agregácia dát podľa parcele s detailnými metrikami
+        # Agregácia dát podľa parciel s detailnými metrikami
         parcel_stats = df.groupby(['name', 'agev_parcel_id', 'area', 'geometry']).agg({
             'yield_percentage': ['mean', 'std', 'min', 'max'],
             'yield_ha': ['mean', 'std', 'min', 'max'],
@@ -180,7 +180,7 @@ def show_enterprise_statistics(df, selected_crop):
     # Analýza výkonnosti parciel
     st.header("🏆 Výkonnosť parciel")
     
-    # Top parcele podľa výnosnosti
+    # Top parcely podľa výnosnosti
     col1, col2 = st.columns(2)
     
     with col1:
@@ -224,7 +224,7 @@ def show_enterprise_statistics(df, selected_crop):
         
         # Nastavenie y-axis v opačnom poradí - najvyššie percento bude hore
         fig.update_layout(
-            title="Top parcele podľa priemernej výnosnosti (%)",
+            title="Top parcely podľa priemernej výnosnosti (%)",
             height=400,
             xaxis_title="Výnosnosť (%)",
             yaxis_title="Parcela",
@@ -238,7 +238,7 @@ def show_enterprise_statistics(df, selected_crop):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        st.subheader("📉 Najhoršie parcele")
+        st.subheader("📉 Najhoršie parcely")
         worst_parcels = df.groupby('name')['yield_percentage'].mean().sort_values().head(10)
         
         # Vytvorenie atraktívneho grafu s gradientom farieb a detailnými tooltipmi
@@ -279,7 +279,7 @@ def show_enterprise_statistics(df, selected_crop):
         
         # Nastavenie y-axis - najvyššie percento bude hore, najnižšie dole
         fig.update_layout(
-            title="Najhoršie parcele podľa priemernej výnosnosti (%)",
+            title="Najhoršie parcely podľa priemernej výnosnosti (%)",
             height=400,
             xaxis_title="Výnosnosť (%)",
             yaxis_title="Parcela",
@@ -297,7 +297,7 @@ def show_enterprise_statistics(df, selected_crop):
     # Kategorizácia parciel do piatich kategórií
     st.header("🏷️ Kategorizácia parciel podľa výkonnosti")
     
-    # Výpočet kategórií pre všetky parcele
+    # Výpočet kategórií pre všetky parcely
     parcel_performance = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False)
     
     # Definovanie kategórií
@@ -369,7 +369,7 @@ def show_enterprise_statistics(df, selected_crop):
     st.subheader("📋 Detailné zobrazenie kategórií")
     
     # Vytvorenie expanderov pre každú kategóriu
-    with st.expander("🏆 Kategória A - Výborné parcele", expanded=False):
+    with st.expander("🏆 Kategória A - Výborné parcely", expanded=False):
         st.markdown("**Kritéria:** Top 20% parciel s najvyššou výnosnosťou")
         st.markdown(f"**Počet parciel:** {len(category_1)} ({len(category_1)/total_parcels*100:.1f}%)")
         st.markdown(f"**Priemerná výnosnosť:** {category_1.mean():.1f}%")
@@ -385,7 +385,7 @@ def show_enterprise_statistics(df, selected_crop):
         category_1_details = category_1_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
         st.dataframe(category_1_details, use_container_width=True)
     
-    with st.expander("🥈 Kategória B - Nadpriemerné parcele", expanded=False):
+    with st.expander("🥈 Kategória B - Nadpriemerné parcely", expanded=False):
         st.markdown("**Kritéria:** Ďalších 20% parciel s nadpriemernou výnosnosťou")
         st.markdown(f"**Počet parciel:** {len(category_2)} ({len(category_2)/total_parcels*100:.1f}%)")
         st.markdown(f"**Priemerná výnosnosť:** {category_2.mean():.1f}%")
@@ -400,7 +400,7 @@ def show_enterprise_statistics(df, selected_crop):
         category_2_details = category_2_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
         st.dataframe(category_2_details, use_container_width=True)
     
-    with st.expander("🥉 Kategória C - Priemerné parcele", expanded=False):
+    with st.expander("🥉 Kategória C - Priemerné parcely", expanded=False):
         st.markdown("**Kritéria:** Stredných 20% parciel s priemernou výnosnosťou")
         st.markdown(f"**Počet parciel:** {len(category_3)} ({len(category_3)/total_parcels*100:.1f}%)")
         st.markdown(f"**Priemerná výnosnosť:** {category_3.mean():.1f}%")
@@ -415,7 +415,7 @@ def show_enterprise_statistics(df, selected_crop):
         category_3_details = category_3_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
         st.dataframe(category_3_details, use_container_width=True)
     
-    with st.expander("⚠️ Kategória D - Podpriemerné parcele", expanded=False):
+    with st.expander("⚠️ Kategória D - Podpriemerné parcely", expanded=False):
         st.markdown("**Kritéria:** Ďalších 20% parciel s podpriemernou výnosnosťou")
         st.markdown(f"**Počet parciel:** {len(category_4)} ({len(category_4)/total_parcels*100:.1f}%)")
         st.markdown(f"**Priemerná výnosnosť:** {category_4.mean():.1f}%")
@@ -430,7 +430,7 @@ def show_enterprise_statistics(df, selected_crop):
         category_4_details = category_4_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
         st.dataframe(category_4_details, use_container_width=True)
     
-    with st.expander("🚨 Kategória E - Slabé parcele", expanded=False):
+    with st.expander("🚨 Kategória E - Slabé parcely", expanded=False):
         st.markdown("**Kritéria:** Posledných 20% parciel s najnižšou výnosnosťou")
         st.markdown(f"**Počet parciel:** {len(category_5)} ({len(category_5)/total_parcels*100:.1f}%)")
         st.markdown(f"**Priemerná výnosnosť:** {category_5.mean():.1f}%")
@@ -456,7 +456,7 @@ def show_enterprise_statistics(df, selected_crop):
     - **Kategória D (Podpriemerné):** Ďalších 20% parciel s podpriemernou výnosnosťou - potrebujú zlepšenie
     - **Kategória E (Slabé):** Posledných 20% parciel s najnižšou výnosnosťou - kritické pre optimalizáciu
     
-    **🎯 Použitie:** Kategorizácia pomáha identifikovať parcele pre rôzne účely (semená, komerčná produkcia, optimalizácia) a plánovať investície do zlepšenia.
+    **🎯 Použitie:** Kategorizácia pomáha identifikovať parcely pre rôzne účely (semená, komerčná produkcia, optimalizácia) a plánovať investície do zlepšenia.
     """)
     
     # Mapa parciel - datová mapa s mriežkou
@@ -464,7 +464,7 @@ def show_enterprise_statistics(df, selected_crop):
     
     col1, col2 = st.columns([3, 1])
     with col1:
-                    st.info("Táto datová mapa zobrazuje všetky parcele s mriežkou, jemným farebným kódovaním podľa výnosnosti a detailnými štatistikami. Každá parcela má unikátnu jemnú farbu od červenej (nízka) cez oranžovú a žltú po zelenú (vysoká výnosnosť).")
+                    st.info("Táto datová mapa zobrazuje všetky parcely s mriežkou, jemným farebným kódovaním podľa výnosnosti a detailnými štatistikami. Každá parcela má unikátnu jemnú farbu od červenej (nízka) cez oranžovú a žltú po zelenú (vysoká výnosnosť).")
     
     with col2:
         if st.button("📊 Exportovať mapu", key="export_enterprise_map"):
