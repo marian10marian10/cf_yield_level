@@ -190,6 +190,65 @@ def create_yield_percentiles(df, crop_name):
     
     return fig
 
+def create_yield_heatmap(df, crop_name):
+    """Vytvorenie heatmapy výnosov pre konkrétnu plodinu"""
+    crop_data = df[df['crop'] == crop_name].copy()
+    
+    if crop_data.empty:
+        return None
+    
+    # Vytvorenie výnosových kategórií pre lepšiu prehľadnosť
+    # Použijeme 10 kategórií od minimálneho po maximálny výnos
+    min_yield = crop_data['yield_ha'].min()
+    max_yield = crop_data['yield_ha'].max()
+    
+    # Vytvorenie kategórií s rovnakou šírkou
+    yield_bins = np.linspace(min_yield, max_yield, 11)
+    yield_labels = [f"{yield_bins[i]:.1f}-{yield_bins[i+1]:.1f}" for i in range(len(yield_bins)-1)]
+    
+    # Pridanie kategórií do dát
+    crop_data['yield_category'] = pd.cut(crop_data['yield_ha'], bins=yield_bins, labels=yield_labels, include_lowest=True)
+    
+    # Agregácia dát podľa roku a výnosovej kategórie
+    heatmap_data = crop_data.groupby(['year', 'yield_category']).size().unstack(fill_value=0)
+    
+    # Preusporiadanie stĺpcov podľa výnosu (od najnižšieho po najvyšší)
+    heatmap_data = heatmap_data.reindex(columns=yield_labels)
+    
+    # Vytvorenie heatmapy
+    fig = go.Figure(data=go.Heatmap(
+        z=heatmap_data.values,
+        x=heatmap_data.columns,
+        y=heatmap_data.index,
+        colorscale='RdYlGn_r',  # Červená (nízke výnosy) -> Zelená (vysoké výnosy)
+        text=heatmap_data.values,
+        texttemplate="%{text}",
+        textfont={"size": 10},
+        hoverongaps=False,
+        hovertemplate='Rok: %{y}<br>Výnos: %{x}<br>Počet parciel: %{z}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title=f"Heatmapa výnosov {crop_name} - Počet parciel podľa roku a výnosu",
+        xaxis_title="Výnosová kategória (t/ha)",
+        yaxis_title="Rok",
+        height=500,
+        xaxis={'side': 'bottom'},
+        yaxis={'side': 'left'},
+        annotations=[
+            dict(
+                text="Tmavšie farby = viac parciel",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0, y=1.05,
+                xanchor='left', yanchor='bottom',
+                font=dict(size=12, color="gray")
+            )
+        ]
+    )
+    
+    return fig
+
 def show_crop_statistics(df, selected_crop):
     """Zobrazenie štatistik na úrovni plodiny"""
     st.header(f"🌱 Štatistiky na úrovni plodiny: {selected_crop}")
@@ -255,6 +314,16 @@ def show_crop_statistics(df, selected_crop):
                 st.plotly_chart(perc_fig, use_container_width=True)
             else:
                 st.warning("Nepodarilo sa vytvoriť graf percentilov výnosov.")
+        
+        # Heatmapa výnosov
+        st.subheader("🗺️ Heatmapa výnosov")
+        st.markdown("**Prehľad výnosov podľa rokov a výnosových kategórií**")
+        
+        heatmap_fig = create_yield_heatmap(df, selected_crop)
+        if heatmap_fig:
+            st.plotly_chart(heatmap_fig, use_container_width=True)
+        else:
+            st.warning("Nepodarilo sa vytvoriť heatmapu výnosov.")
         
         # Detailné štatistiky podľa rokov
         st.subheader("📅 Detailné štatistiky podľa rokov")
