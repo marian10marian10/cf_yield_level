@@ -166,11 +166,10 @@ def create_parcel_crop_comparison(df, parcel_name):
     # Agregácia dát podľa plodiny
     crop_stats = parcel_data.groupby('crop').agg({
         'yield_ha': ['mean', 'std', 'count'],
-        'yield_percentage': 'mean',
         'area': 'mean'
     }).round(2)
     
-    crop_stats.columns = ['priemerny_vyos', 'std_vyos', 'pocet_rokov', 'priemerna_vyosnost', 'priemerna_plocha']
+    crop_stats.columns = ['priemerny_vyos', 'std_vyos', 'pocet_rokov', 'priemerna_plocha']
     crop_stats = crop_stats.reset_index()
     
     # Vytvorenie grafu
@@ -180,23 +179,15 @@ def create_parcel_crop_comparison(df, parcel_name):
         x=crop_stats['crop'],
         y=crop_stats['priemerny_vyos'],
         name='Priemerný výnos (t/ha)',
-        yaxis='y'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=crop_stats['crop'],
-        y=crop_stats['priemerna_vyosnost'],
-        name='Priemerná výnosnosť (%)',
-        yaxis='y2'
+        marker_color='#1f77b4'
     ))
     
     fig.update_layout(
         title=f"Porovnanie plodín na parcieli {parcel_name}",
         xaxis_title="Plodina",
-        yaxis=dict(title="Výnos (t/ha)", side="left"),
-        yaxis2=dict(title="Výnosnosť (%)", side="right", overlaying="y"),
+        yaxis_title="Výnos (t/ha)",
         height=400,
-        barmode='group'
+        showlegend=True
     )
     
     return fig
