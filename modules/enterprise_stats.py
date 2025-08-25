@@ -294,6 +294,171 @@ def show_enterprise_statistics(df, selected_crop):
     st.markdown("---")
     st.markdown("**📊 Metodika:** Percentá = (Skutočný výnos / Priemerný výnos) × 100. Priemerný výnos sa počíta ako aritmetický priemer všetkých parciel pre danú plodinu a rok. 100% = priemer, >100% = nadpriemer, <100% = podpriemer.")
     
+    # Kategorizácia parciel do piatich kategórií
+    st.header("🏷️ Kategorizácia parciel podľa výkonnosti")
+    
+    # Výpočet kategórií pre všetky parcele
+    parcel_performance = df.groupby('name')['yield_percentage'].mean().sort_values(ascending=False)
+    
+    # Definovanie kategórií
+    total_parcels = len(parcel_performance)
+    category_1_count = int(total_parcels * 0.2)  # Top 20%
+    category_2_count = int(total_parcels * 0.2)  # Next 20%
+    category_3_count = int(total_parcels * 0.2)  # Middle 20%
+    category_4_count = int(total_parcels * 0.2)  # Next 20%
+    category_5_count = total_parcels - category_1_count - category_2_count - category_3_count - category_4_count  # Remaining
+    
+    # Rozdelenie parciel do kategórií
+    category_1 = parcel_performance.head(category_1_count)
+    category_2 = parcel_performance.iloc[category_1_count:category_1_count + category_2_count]
+    category_3 = parcel_performance.iloc[category_1_count + category_2_count:category_1_count + category_2_count + category_3_count]
+    category_4 = parcel_performance.iloc[category_1_count + category_2_count + category_3_count:category_1_count + category_2_count + category_3_count + category_4_count]
+    category_5 = parcel_performance.tail(category_5_count)
+    
+    # Vytvorenie súhrnnej tabuľky kategórií
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Tabuľka s kategóriami
+        category_summary = pd.DataFrame({
+            'Kategória': ['A - Výborné', 'B - Nadpriemerné', 'C - Priemerné', 'D - Podpriemerné', 'E - Slabé'],
+            'Počet parciel': [len(category_1), len(category_2), len(category_3), len(category_4), len(category_5)],
+            'Percento z celku': [
+                f"{len(category_1)/total_parcels*100:.1f}%",
+                f"{len(category_2)/total_parcels*100:.1f}%",
+                f"{len(category_3)/total_parcels*100:.1f}%",
+                f"{len(category_4)/total_parcels*100:.1f}%",
+                f"{len(category_5)/total_parcels*100:.1f}%"
+            ],
+            'Priemerná výnosnosť': [
+                f"{category_1.mean():.1f}%",
+                f"{category_2.mean():.1f}%",
+                f"{category_3.mean():.1f}%",
+                f"{category_4.mean():.1f}%",
+                f"{category_5.mean():.1f}%"
+            ],
+            'Rozsah výnosnosti': [
+                f"{category_1.min():.1f}% - {category_1.max():.1f}%",
+                f"{category_2.min():.1f}% - {category_2.max():.1f}%",
+                f"{category_3.min():.1f}% - {category_3.max():.1f}%",
+                f"{category_4.min():.1f}% - {category_4.max():.1f}%",
+                f"{category_5.min():.1f}% - {category_5.max():.1f}%"
+            ]
+        })
+        
+        st.dataframe(category_summary, use_container_width=True, hide_index=True)
+    
+    with col2:
+        # Pie chart s kategóriami
+        fig = px.pie(
+            values=[len(category_1), len(category_2), len(category_3), len(category_4), len(category_5)],
+            names=['A', 'B', 'C', 'D', 'E'],
+            title="Rozdelenie parciel do kategórií",
+            color_discrete_map={
+                'A': '#2E8B57',  # Sea Green
+                'B': '#32CD32',  # Lime Green
+                'C': '#FFD700',  # Gold
+                'D': '#FF8C00',  # Dark Orange
+                'E': '#DC143C'   # Crimson
+            }
+        )
+        fig.update_layout(height=300, showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Detailné zobrazenie parciel v každej kategórii
+    st.subheader("📋 Detailné zobrazenie kategórií")
+    
+    # Vytvorenie expanderov pre každú kategóriu
+    with st.expander("🏆 Kategória A - Výborné parcele", expanded=False):
+        st.markdown("**Kritéria:** Top 20% parciel s najvyššou výnosnosťou")
+        st.markdown(f"**Počet parciel:** {len(category_1)} ({len(category_1)/total_parcels*100:.1f}%)")
+        st.markdown(f"**Priemerná výnosnosť:** {category_1.mean():.1f}%")
+        
+        # Tabuľka s detailmi
+        category_1_details = df[df['name'].isin(category_1.index)].groupby('name').agg({
+            'yield_percentage': ['mean', 'std', 'min', 'max'],
+            'area': 'first',
+            'crop': 'nunique',
+            'year': 'nunique'
+        }).round(2)
+        category_1_details.columns = ['Priemerná výnosnosť (%)', 'Smerodajná odchýlka', 'Minimum', 'Maximum', 'Plocha (ha)', 'Počet plodín', 'Počet rokov']
+        category_1_details = category_1_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
+        st.dataframe(category_1_details, use_container_width=True)
+    
+    with st.expander("🥈 Kategória B - Nadpriemerné parcele", expanded=False):
+        st.markdown("**Kritéria:** Ďalších 20% parciel s nadpriemernou výnosnosťou")
+        st.markdown(f"**Počet parciel:** {len(category_2)} ({len(category_2)/total_parcels*100:.1f}%)")
+        st.markdown(f"**Priemerná výnosnosť:** {category_2.mean():.1f}%")
+        
+        category_2_details = df[df['name'].isin(category_2.index)].groupby('name').agg({
+            'yield_percentage': ['mean', 'std', 'min', 'max'],
+            'area': 'first',
+            'crop': 'nunique',
+            'year': 'nunique'
+        }).round(2)
+        category_2_details.columns = ['Priemerná výnosnosť (%)', 'Smerodajná odchýlka', 'Minimum', 'Maximum', 'Plocha (ha)', 'Počet plodín', 'Počet rokov']
+        category_2_details = category_2_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
+        st.dataframe(category_2_details, use_container_width=True)
+    
+    with st.expander("🥉 Kategória C - Priemerné parcele", expanded=False):
+        st.markdown("**Kritéria:** Stredných 20% parciel s priemernou výnosnosťou")
+        st.markdown(f"**Počet parciel:** {len(category_3)} ({len(category_3)/total_parcels*100:.1f}%)")
+        st.markdown(f"**Priemerná výnosnosť:** {category_3.mean():.1f}%")
+        
+        category_3_details = df[df['name'].isin(category_3.index)].groupby('name').agg({
+            'yield_percentage': ['mean', 'std', 'min', 'max'],
+            'area': 'first',
+            'crop': 'nunique',
+            'year': 'nunique'
+        }).round(2)
+        category_3_details.columns = ['Priemerná výnosnosť (%)', 'Smerodajná odchýlka', 'Minimum', 'Maximum', 'Plocha (ha)', 'Počet plodín', 'Počet rokov']
+        category_3_details = category_3_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
+        st.dataframe(category_3_details, use_container_width=True)
+    
+    with st.expander("⚠️ Kategória D - Podpriemerné parcele", expanded=False):
+        st.markdown("**Kritéria:** Ďalších 20% parciel s podpriemernou výnosnosťou")
+        st.markdown(f"**Počet parciel:** {len(category_4)} ({len(category_4)/total_parcels*100:.1f}%)")
+        st.markdown(f"**Priemerná výnosnosť:** {category_4.mean():.1f}%")
+        
+        category_4_details = df[df['name'].isin(category_4.index)].groupby('name').agg({
+            'yield_percentage': ['mean', 'std', 'min', 'max'],
+            'area': 'first',
+            'crop': 'nunique',
+            'year': 'nunique'
+        }).round(2)
+        category_4_details.columns = ['Priemerná výnosnosť (%)', 'Smerodajná odchýlka', 'Minimum', 'Maximum', 'Plocha (ha)', 'Počet plodín', 'Počet rokov']
+        category_4_details = category_4_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
+        st.dataframe(category_4_details, use_container_width=True)
+    
+    with st.expander("🚨 Kategória E - Slabé parcele", expanded=False):
+        st.markdown("**Kritéria:** Posledných 20% parciel s najnižšou výnosnosťou")
+        st.markdown(f"**Počet parciel:** {len(category_5)} ({len(category_5)/total_parcels*100:.1f}%)")
+        st.markdown(f"**Priemerná výnosnosť:** {category_5.mean():.1f}%")
+        
+        category_5_details = df[df['name'].isin(category_5.index)].groupby('name').agg({
+            'yield_percentage': ['mean', 'std', 'min', 'max'],
+            'area': 'first',
+            'crop': 'nunique',
+            'year': 'nunique'
+        }).round(2)
+        category_5_details.columns = ['Priemerná výnosnosť (%)', 'Smerodajná odchýlka', 'Minimum', 'Maximum', 'Plocha (ha)', 'Počet plodín', 'Počet rokov']
+        category_5_details = category_5_details.sort_values('Priemerná výnosnosť (%)', ascending=False)
+        st.dataframe(category_5_details, use_container_width=True)
+    
+    # Vysvetlenie kategorizácie
+    st.markdown("---")
+    st.markdown("""
+    **📊 Vysvetlenie kategorizácie:**
+    
+    - **Kategória A (Výborné):** Top 20% parciel s najvyššou výnosnosťou - ideálne pre produkciu semen a maximálne výnosy
+    - **Kategória B (Nadpriemerné):** Ďalších 20% parciel s nadpriemernou výnosnosťou - vhodné pre komerčnú produkciu
+    - **Kategória C (Priemerné):** Stredných 20% parciel s priemernou výnosnosťou - štandardná produkcia
+    - **Kategória D (Podpriemerné):** Ďalších 20% parciel s podpriemernou výnosnosťou - potrebujú zlepšenie
+    - **Kategória E (Slabé):** Posledných 20% parciel s najnižšou výnosnosťou - kritické pre optimalizáciu
+    
+    **🎯 Použitie:** Kategorizácia pomáha identifikovať parcele pre rôzne účely (semená, komerčná produkcia, optimalizácia) a plánovať investície do zlepšenia.
+    """)
+    
     # Mapa parciel - datová mapa s mriežkou
     st.header("🗺️ Datová mapa parciel")
     
