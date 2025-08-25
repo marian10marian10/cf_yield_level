@@ -8,6 +8,120 @@ from shapely import wkt
 import folium
 from folium import plugins
 
+def create_crop_timeline_charts(df, parcel_name):
+    """Vytvorenie malých grafov pre časovú postupnosť úrod pre jednotlivé plodiny"""
+    parcel_data = df[df['name'].astype(str) == parcel_name].copy()
+    
+    if parcel_data.empty:
+        return None
+    
+    # Zoskupenie dát podľa plodiny a kontrola počtu záznamov
+    crop_groups = parcel_data.groupby('crop')
+    valid_crops = []
+    
+    for crop, crop_data in crop_groups:
+        if len(crop_data) > 2:  # Iba plodiny s viac ako 2 záznamami
+            valid_crops.append((crop, crop_data))
+    
+    if not valid_crops:
+        return None
+    
+    # Vytvorenie stĺpcov pre grafy (max 3 grafy v riadku)
+    cols_per_row = 3
+    num_rows = (len(valid_crops) + cols_per_row - 1) // cols_per_row
+    
+    charts_container = []
+    
+    for i in range(num_rows):
+        row_crops = valid_crops[i * cols_per_row:(i + 1) * cols_per_row]
+        cols = st.columns(len(row_crops))
+        
+        for j, (crop, crop_data) in enumerate(row_crops):
+            with cols[j]:
+                # Zoradenie dát podľa roku
+                crop_data_sorted = crop_data.sort_values('year')
+                
+                # Vytvorenie malého grafu pre plodinu
+                fig = go.Figure()
+                
+                fig.add_trace(go.Scatter(
+                    x=crop_data_sorted['year'],
+                    y=crop_data_sorted['yield_ha'],
+                    mode='lines+markers',
+                    name=crop,
+                    line=dict(width=2, color='#1f77b4'),
+                    marker=dict(size=6, color='#1f77b4'),
+                    hovertemplate=f'<b>{crop}</b><br>' +
+                                'Rok: %{x}<br>' +
+                                'Výnos: %{y:.2f} t/ha<extra></extra>'
+                ))
+                
+                # Pridanie trendovej línie ak sú aspoň 3 body
+                if len(crop_data_sorted) >= 3:
+                    z = np.polyfit(crop_data_sorted['year'], crop_data_sorted['yield_ha'], 1)
+                    p = np.poly1d(z)
+                    fig.add_trace(go.Scatter(
+                        x=crop_data_sorted['year'],
+                        y=p(crop_data_sorted['year']),
+                        mode='lines',
+                        name='Trend',
+                        line=dict(width=1, color='red', dash='dash'),
+                        showlegend=False,
+                        hovertemplate='Trend<extra></extra>'
+                    ))
+                
+                # Výpočet metrík pre plodinu
+                avg_yield = crop_data_sorted['yield_ha'].mean()
+                yield_trend = "↗️" if len(crop_data_sorted) >= 2 and crop_data_sorted['yield_ha'].iloc[-1] > crop_data_sorted['yield_ha'].iloc[0] else "↘️"
+                
+                # Aktualizácia layoutu grafu
+                fig.update_layout(
+                    title=f"🌾 {crop}",
+                    xaxis_title="Rok",
+                    yaxis_title="Výnos (t/ha)",
+                    height=250,
+                    margin=dict(l=40, r=40, t=60, b=40),
+                    showlegend=False,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='rgba(128,128,128,0.2)',
+                        zeroline=False
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='rgba(128,128,128,0.2)',
+                        zeroline=False
+                    )
+                )
+                
+                # Pridanie metrík pod graf
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                
+                # Zobrazenie kľúčových metrík
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Priemerný výnos", f"{avg_yield:.2f} t/ha")
+                with col2:
+                    st.metric("Trend", yield_trend)
+                
+                # Detailné informácie o plodine
+                with st.expander(f"📊 Detailné údaje pre {crop}"):
+                    st.write(f"**Počet záznamov:** {len(crop_data_sorted)}")
+                    st.write(f"**Obdobie:** {crop_data_sorted['year'].min()} - {crop_data_sorted['year'].max()}")
+                    st.write(f"**Najlepší rok:** {crop_data_sorted.loc[crop_data_sorted['yield_ha'].idxmax(), 'year']} ({crop_data_sorted['yield_ha'].max():.2f} t/ha)")
+                    st.write(f"**Najhorší rok:** {crop_data_sorted.loc[crop_data_sorted['yield_ha'].idxmin(), 'year']} ({crop_data_sorted['yield_ha'].min():.2f} t/ha)")
+                    
+                    # Malá tabuľka s údajmi
+                    display_data = crop_data_sorted[['year', 'yield_ha', 'yield_percentage']].copy()
+                    display_data.columns = ['Rok', 'Výnos (t/ha)', 'Výnosnosť (%)']
+                    st.dataframe(display_data, use_container_width=True, hide_index=True)
+    
+    return True
+
 def create_parcel_yield_timeline(df, parcel_name):
     """Vytvorenie časovej osi výnosov pre konkrétnu parcelu"""
     parcel_data = df[df['name'].astype(str) == parcel_name].copy()
@@ -858,6 +972,14 @@ def show_parcel_statistics(df):
     crop_comparison_fig = create_parcel_crop_comparison(df, selected_parcel)
     if crop_comparison_fig:
         st.plotly_chart(crop_comparison_fig, use_container_width=True)
+    
+    # Časové grafy pre jednotlivé plodiny
+    st.subheader("📈 Časové grafy úrod pre jednotlivé plodiny")
+    st.info("Grafy sa zobrazujú len pre plodiny s viac ako 2 záznamami")
+    
+    crop_timeline_result = create_crop_timeline_charts(df, selected_parcel)
+    if not crop_timeline_result:
+        st.warning("Pre túto parcelu nie sú dostupné plodiny s dostatočným počtom záznamov pre vytvorenie časových grafov.")
     
     # Detailné dáta parcely
     st.subheader("📊 Detailné dáta parcely")
