@@ -166,17 +166,12 @@ def create_parcel_map(df, selected_parcel):
         center_lat = (bounds[1] + bounds[3]) / 2
         
         # Výpočet vhodného zoom levelu na základe veľkosti parcely
-        lon_range = bounds[2] - bounds[0]
-        lat_range = bounds[3] - bounds[1]
-        max_range = max(lon_range, lat_range)
-        
-        # Nastavenie zoom levelu na základe veľkosti parcely
         if max_range > 0.1:  # Veľká parcela
-            zoom_level = 12
+            zoom_level = 11  # Znížené z 12 na 11 pre lepší prehľad
         elif max_range > 0.01:  # Stredná parcela
-            zoom_level = 15
+            zoom_level = 14  # Znížené z 15 na 14 pre lepší prehľad
         else:  # Malá parcela
-            zoom_level = 18
+            zoom_level = 17  # Znížené z 18 na 17 pre lepší prehľad
         
         # Vytvorenie mapy pomocou folium
         m = folium.Map(
@@ -185,6 +180,13 @@ def create_parcel_map(df, selected_parcel):
             tiles='CartoDB positron',  # Profesionálny štýl mapy
             control_scale=True
         )
+        
+        # Nastavenie bounds s paddingom pre zobrazenie celej parcely
+        padding = max_range * 0.1  # 10% padding okolo parcely
+        m.fit_bounds([
+            [bounds[1] - padding, bounds[0] - padding],
+            [bounds[3] + padding, bounds[2] + padding]
+        ])
         
         # Pridanie parcely s farebným kódovaním podľa výnosov
         if not parcel_data.empty:
@@ -295,12 +297,13 @@ def create_enhanced_parcel_map(df, selected_parcel):
         lat_range = bounds[3] - bounds[1]
         max_range = max(lon_range, lat_range)
         
-        if max_range > 0.1:
-            zoom_level = 12
-        elif max_range > 0.01:
-            zoom_level = 15
-        else:
-            zoom_level = 18
+        # Nastavenie zoom levelu tak, aby parcela bola zobrazená celá s paddingom
+        if max_range > 0.1:  # Veľká parcela
+            zoom_level = 11  # Znížené z 12 na 11 pre lepší prehľad
+        elif max_range > 0.01:  # Stredná parcela
+            zoom_level = 14  # Znížené z 15 na 14 pre lepší prehľad
+        else:  # Malá parcela
+            zoom_level = 17  # Znížené z 18 na 17 pre lepší prehľad
         
         # Vytvorenie mapy pomocou folium s datovým vzhľadom
         m = folium.Map(
@@ -309,6 +312,13 @@ def create_enhanced_parcel_map(df, selected_parcel):
             tiles='CartoDB positron',  # Čistý, datový štýl bez satelitného pozadia
             control_scale=True
         )
+        
+        # Nastavenie bounds s paddingom pre zobrazenie celej parcely
+        padding = max_range * 0.1  # 10% padding okolo parcely
+        m.fit_bounds([
+            [bounds[1] - padding, bounds[0] - padding],
+            [bounds[3] + padding, bounds[2] + padding]
+        ])
         
         # Pridanie parcely s farebným kódovaním
         folium.GeoJson(
@@ -826,8 +836,8 @@ def show_parcel_statistics(df):
         st.error(f"Pre parcelu {selected_parcel} nie sú dostupné žiadne dáta.")
         return
     
-            # Základné informácie o parcieli
-        st.subheader(f"📋 Informácie o parcieli: {selected_parcel}")
+    # Základné informácie o parcieli
+    st.subheader(f"📋 Informácie o parcieli: {selected_parcel}")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -842,12 +852,6 @@ def show_parcel_statistics(df):
     
     with col4:
         st.metric("Priemerná plocha", f"{parcel_data['area'].mean():.2f} ha")
-    
-    # Časová os výnosov
-    st.subheader("📈 Časová os výnosov")
-    timeline_fig = create_parcel_yield_timeline(df, selected_parcel)
-    if timeline_fig:
-        st.plotly_chart(timeline_fig, use_container_width=True)
     
     # Porovnanie plodín
     st.subheader("🌾 Porovnanie plodín")
@@ -876,41 +880,6 @@ def show_parcel_statistics(df):
     if radar_fig:
         st.plotly_chart(radar_fig, use_container_width=True)
     
-    # Mapa všetkých parciel
-    st.subheader("🗺️ Datová mapa všetkých parciel")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.info("Táto datová mapa zobrazuje všetky parcely s mriežkou, farebným kódovaním podľa výnosnosti a detailnými štatistikami. Zelené parcely majú vyššiu výnosnosť, červené nižšiu.")
-    
-    with col2:
-        if st.button("📊 Exportovať mapu", key="export_all_parcels_map"):
-            st.info("Funkcia exportu mapy bude implementovaná v ďalšej verzii.")
-    
-    with st.spinner("Generujem datovú mapu všetkých parciel s mriežkou..."):
-        all_parcels_map = create_all_parcels_map(df)
-        if all_parcels_map:
-            # Pre folium mapu používame st.components.html
-            folium_static = all_parcels_map._repr_html_()
-            st.components.v1.html(folium_static, height=700)
-            
-            # Štatistiky parciel
-            parcels_with_geometry = df[df['geometry'].notna()].copy()
-            if not parcels_with_geometry.empty:
-                parcel_performance = parcels_with_geometry.groupby('name')['yield_percentage'].mean()
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Celkový počet parciel", len(parcel_performance))
-                with col2:
-                    st.metric("Priemerná výnosnosť", f"{parcel_performance.mean():.1f}%")
-                with col3:
-                    st.metric("Najlepšia parcela", f"{parcel_performance.max():.1f}%")
-                with col4:
-                    st.metric("Najhoršia parcela", f"{parcel_performance.min():.1f}%")
-        else:
-            st.warning("Nepodarilo sa vytvoriť prehľadovú mapu parciel.")
-    
     # Mapa parcely
     st.subheader("🗺️ Datová mapa vybranej parcely")
     
@@ -922,7 +891,7 @@ def show_parcel_statistics(df):
         key="map_type_selector"
     )
     
-            # Informácie o vybranej parcieli
+    # Informácie o vybranej parcieli
     if not parcel_data.empty:
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
