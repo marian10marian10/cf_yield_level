@@ -931,11 +931,17 @@ def show_parcel_statistics(df):
         st.error("Nie sú dostupné žiadne parcely.")
         return
     
-    # Výber parcely
+    # Výber parcely s predvolenou hodnotou "Akat Velky 1"
+    # Hľadanie indexu pre "Akat Velky 1"
+    default_index = 0
+    if "Akat Velky 1" in available_parcels:
+        default_index = available_parcels.index("Akat Velky 1")
+        st.sidebar.success(f"Predvolená parcela: Akat Velky 1")
+    
     selected_parcel = st.sidebar.selectbox(
         "Vyberte parcelu:",
         available_parcels,
-        index=0
+        index=default_index
     )
     
     if not selected_parcel:
