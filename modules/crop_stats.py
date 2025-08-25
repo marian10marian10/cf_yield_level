@@ -198,9 +198,9 @@ def create_yield_heatmap(df, crop_name):
         return None
     
     # Vytvorenie výnosových kategórií pre lepšiu prehľadnosť
-    # Použijeme 10 kategórií od minimálneho po maximálny výnos
-    min_yield = crop_data['yield_ha'].min()
-    max_yield = crop_data['yield_ha'].max()
+    # Použijeme percentily namiesto absolútnych min/max pre odstránenie odľahlých hodnôt
+    min_yield = crop_data['yield_ha'].quantile(0.01)  # 1. percentil namiesto minima
+    max_yield = crop_data['yield_ha'].quantile(0.99)  # 99. percentil namiesto maxima
     
     # Vytvorenie kategórií s rovnakou šírkou
     yield_bins = np.linspace(min_yield, max_yield, 11)
@@ -243,6 +243,14 @@ def create_yield_heatmap(df, crop_name):
                 x=0, y=1.05,
                 xanchor='left', yanchor='bottom',
                 font=dict(size=12, color="gray")
+            ),
+            dict(
+                text="Rozsah: 1.-99. percentil (odľahlé hodnoty odstránené)",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0, y=1.02,
+                xanchor='left', yanchor='bottom',
+                font=dict(size=10, color="gray")
             )
         ]
     )
