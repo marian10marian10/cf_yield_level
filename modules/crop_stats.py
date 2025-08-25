@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 
 def create_yield_boxplot(df, crop_name):
     """Vytvorenie boxplot grafu pre konkrétnu plodinu"""
@@ -97,8 +98,100 @@ def create_yield_trend(df, crop_name):
     
     return fig
 
+def create_yield_distribution(df, crop_name):
+    """Vytvorenie histogramu distribúcie výnosov pre konkrétnu plodinu"""
+    crop_data = df[df['crop'] == crop_name].copy()
+    
+    if crop_data.empty:
+        return None
+    
+    # Výpočet mediánu
+    median_yield = crop_data['yield_ha'].median()
+    
+    # Vytvorenie histogramu
+    fig = go.Figure()
+    
+    fig.add_trace(go.Histogram(
+        x=crop_data['yield_ha'],
+        nbinsx=20,
+        marker_color='lightblue',
+        opacity=0.8,
+        name='Počet parciel'
+    ))
+    
+    # Pridanie čiary mediánu
+    fig.add_vline(
+        x=median_yield,
+        line_dash="dash",
+        line_color="orange",
+        annotation_text=f"Medián: {median_yield:.2f} t/ha",
+        annotation_position="top right"
+    )
+    
+    fig.update_layout(
+        title=f"Distribúcia výnosov {crop_name}",
+        xaxis_title="Výnos (t/ha)",
+        yaxis_title="Počet parciel",
+        height=400,
+        showlegend=False,
+        bargap=0.1
+    )
+    
+    return fig
+
+def create_yield_percentiles(df, crop_name):
+    """Vytvorenie histogramu s percentilmi výnosov pre konkrétnu plodinu"""
+    crop_data = df[df['crop'] == crop_name].copy()
+    
+    if crop_data.empty:
+        return None
+    
+    # Výpočet percentilov
+    percentiles = {
+        '10%': crop_data['yield_ha'].quantile(0.10),
+        '25%': crop_data['yield_ha'].quantile(0.25),
+        '50%': crop_data['yield_ha'].quantile(0.50),
+        '75%': crop_data['yield_ha'].quantile(0.75),
+        '90%': crop_data['yield_ha'].quantile(0.90),
+        '95%': crop_data['yield_ha'].quantile(0.95)
+    }
+    
+    # Vytvorenie histogramu
+    fig = go.Figure()
+    
+    fig.add_trace(go.Histogram(
+        x=crop_data['yield_ha'],
+        nbinsx=20,
+        marker_color='lightgreen',
+        opacity=0.8,
+        name='Počet parciel'
+    ))
+    
+    # Pridanie percentilových čiar s farebnými bodkami
+    colors = ['red', 'orange', 'blue', 'yellow', 'brown', 'black']
+    for i, (percentile, value) in enumerate(percentiles.items()):
+        fig.add_vline(
+            x=value,
+            line_dash="dot",
+            line_color=colors[i],
+            line_width=2,
+            annotation_text=f"{percentile}: {value:.2f} t/ha",
+            annotation_position="bottom"
+        )
+    
+    fig.update_layout(
+        title=f"Analýza percentilov výnosov {crop_name}",
+        xaxis_title="Výnos (t/ha)",
+        yaxis_title="Počet parciel",
+        height=400,
+        showlegend=False,
+        bargap=0.1
+    )
+    
+    return fig
+
 def show_crop_statistics(df, selected_crop):
-    """Zobrazenie štatistík na úrovni plodiny"""
+    """Zobrazenie štatistik na úrovni plodiny"""
     st.header(f"🌱 Štatistiky na úrovni plodiny: {selected_crop}")
     
     if selected_crop:
@@ -141,6 +234,27 @@ def show_crop_statistics(df, selected_crop):
                 st.plotly_chart(trend_fig, use_container_width=True)
             else:
                 st.warning("Nepodarilo sa vytvoriť trendový graf výnosov.")
+        
+        # Nové grafy - Distribúcia a percentily výnosov
+        st.subheader("📊 Distribúcia a percentily výnosov")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Distribúcia výnosov**")
+            dist_fig = create_yield_distribution(df, selected_crop)
+            if dist_fig:
+                st.plotly_chart(dist_fig, use_container_width=True)
+            else:
+                st.warning("Nepodarilo sa vytvoriť graf distribúcie výnosov.")
+        
+        with col2:
+            st.markdown("**Analýza percentilov**")
+            perc_fig = create_yield_percentiles(df, selected_crop)
+            if perc_fig:
+                st.plotly_chart(perc_fig, use_container_width=True)
+            else:
+                st.warning("Nepodarilo sa vytvoriť graf percentilov výnosov.")
         
         # Detailné štatistiky podľa rokov
         st.subheader("📅 Detailné štatistiky podľa rokov")
