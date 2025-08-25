@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="Analýza výnosov DPB",
     page_icon="🌾",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # Zmenené na collapsed
 )
 
 # CSS pre lepší vzhľad
@@ -55,6 +55,13 @@ st.markdown("""
         background-color: #1f77b4;
         color: white;
     }
+    .filter-container {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,31 +79,14 @@ def main():
     # Výpočet percentuálnych výnosov
     df = calculate_yield_percentage(df)
     
-    # Sidebar pre výber plodiny
-    st.sidebar.header("Nastavenia")
-    
-    # Výber plodiny v sidebar s prednastavenou hodnotou
-    available_crops = sorted(df['crop'].unique())
-    
     # Inicializácia session state pre plodinu
+    available_crops = sorted(df['crop'].unique())
     if 'selected_crop' not in st.session_state:
         # Hľadanie indexu pre PŠENICE OZ.
         if "PŠENICE OZ." in available_crops:
             st.session_state.selected_crop = "PŠENICE OZ."
-            st.sidebar.success(f"Prednastavená plodina: PŠENICE OZ.")
         else:
             st.session_state.selected_crop = available_crops[0]
-    
-    # Výber plodiny s aktuálnou hodnotou zo session state
-    selected_crop = st.sidebar.selectbox(
-        "Vyberte plodinu:", 
-        available_crops, 
-        index=available_crops.index(st.session_state.selected_crop),
-        key="crop_selector"
-    )
-    
-    # Aktualizácia session state
-    st.session_state.selected_crop = selected_crop
     
     # Menu s kartami
     st.header("📋 Menu aplikácie")
@@ -122,11 +112,62 @@ def main():
     
     # Zobrazenie obsahu podľa vybranej karty
     if st.session_state.active_tab == "enterprise":
+        # Filter pre plodinu na karte podniku
+        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+        st.subheader("🔍 Filtre")
+        selected_crop = st.selectbox(
+            "Vyberte plodinu:", 
+            available_crops, 
+            index=available_crops.index(st.session_state.selected_crop),
+            key="enterprise_crop_selector"
+        )
+        st.session_state.selected_crop = selected_crop
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         show_enterprise_statistics(df, selected_crop)
+        
     elif st.session_state.active_tab == "crop":
+        # Filter pre plodinu na karte plodiny
+        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+        st.subheader("🔍 Filtre")
+        selected_crop = st.selectbox(
+            "Vyberte plodinu:", 
+            available_crops, 
+            index=available_crops.index(st.session_state.selected_crop),
+            key="crop_crop_selector"
+        )
+        st.session_state.selected_crop = selected_crop
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         show_crop_statistics(df, selected_crop)
+        
     elif st.session_state.active_tab == "parcel":
-        show_parcel_statistics(df)
+        # Filter pre parcelu na karte parcely
+        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+        st.subheader("🔍 Filtre")
+        
+        # Získanie zoznamu parciel
+        available_parcels = sorted([str(parcel) for parcel in df['name'].unique() if pd.notna(parcel)])
+        
+        if not available_parcels:
+            st.error("Nie sú dostupné žiadne parcely.")
+            return
+        
+        # Výber parcely s predvolenou hodnotou "Akat Velky 1"
+        default_index = 0
+        if "Akat Velky 1" in available_parcels:
+            default_index = available_parcels.index("Akat Velky 1")
+            st.success(f"Predvolená parcela: Akat Velky 1")
+        
+        selected_parcel = st.selectbox(
+            "Vyberte parcelu:",
+            available_parcels,
+            index=default_index,
+            key="parcel_selector"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        show_parcel_statistics(df, selected_parcel)
 
 if __name__ == "__main__":
     main()

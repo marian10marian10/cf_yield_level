@@ -907,36 +907,12 @@ def create_all_parcels_map(df):
         st.error(f"Chyba pri vytváraní datovej mapy všetkých parciel: {e}")
         return None
 
-def show_parcel_statistics(df):
+def show_parcel_statistics(df, selected_parcel):
     """Zobrazenie štatistík na úrovni parcely"""
     st.header("🏞️ Štatistiky na úrovni parcely")
     
-    # Sidebar pre výber parcely
-    st.sidebar.header("Výber parcely")
-    
-    # Získanie zoznamu parciel
-    # Vyčistenie a konverzia na string pre správne triedenie
-    available_parcels = sorted([str(parcel) for parcel in df['name'].unique() if pd.notna(parcel)])
-    
-    if not available_parcels:
-        st.error("Nie sú dostupné žiadne parcely.")
-        return
-    
-    # Výber parcely s predvolenou hodnotou "Akat Velky 1"
-    # Hľadanie indexu pre "Akat Velky 1"
-    default_index = 0
-    if "Akat Velky 1" in available_parcels:
-        default_index = available_parcels.index("Akat Velky 1")
-        st.sidebar.success(f"Predvolená parcela: Akat Velky 1")
-    
-    selected_parcel = st.sidebar.selectbox(
-        "Vyberte parcelu:",
-        available_parcels,
-        index=default_index
-    )
-    
     if not selected_parcel:
-        st.info("Vyberte parcelu z ľavého panelu.")
+        st.info("Vyberte parcelu z filtra hore.")
         return
     
     # Filtrovanie dát pre vybranú parcelu
