@@ -220,7 +220,7 @@ def create_yield_heatmap(df, crop_name):
         z=heatmap_data.values,
         x=heatmap_data.columns,
         y=heatmap_data.index,
-        colorscale='RdYlGn_r',  # Červená (nízke výnosy) -> Zelená (vysoké výnosy)
+        colorscale='Blues',  # Modrá škála: svetlá (slabý gradient) -> tmavá (silný gradient)
         text=heatmap_data.values,
         texttemplate="%{text}",
         textfont={"size": 10},
@@ -237,7 +237,7 @@ def create_yield_heatmap(df, crop_name):
         yaxis={'side': 'left'},
         annotations=[
             dict(
-                text="Tmavšie farby = viac parciel",
+                text="Tmavšie modré farby = viac parciel",
                 showarrow=False,
                 xref="paper", yref="paper",
                 x=0, y=1.05,
