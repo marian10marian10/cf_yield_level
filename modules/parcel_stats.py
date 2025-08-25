@@ -5,6 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import geopandas as gpd
 from shapely import wkt
+import folium
+from folium import plugins
 
 def create_parcel_yield_timeline(df, parcel_name):
     """Vytvorenie časovej osi výnosov pre konkrétnu parcelu"""
@@ -137,8 +139,11 @@ def create_parcel_performance_radar(df, parcel_name):
     return fig
 
 def create_parcel_map(df, selected_parcel):
-    """Vytvorenie profesionálnej mapy s vybranou parcelou pomocou geopandas a plotly"""
+    """Vytvorenie profesionálnej mapy s vybranou parcelou pomocou geopandas a folium"""
     try:
+        import folium
+        from folium import plugins
+        
         # Filtrovanie dát pre vybranú parcelu
         parcel_data = df[df['name'].astype(str) == selected_parcel].copy()
         
@@ -173,20 +178,15 @@ def create_parcel_map(df, selected_parcel):
         else:  # Malá parcela
             zoom_level = 18
         
-        # Vytvorenie profesionálnej mapy pomocou plotly
-        fig = go.Figure()
+        # Vytvorenie mapy pomocou folium
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=zoom_level,
+            tiles='CartoDB positron',  # Profesionálny štýl mapy
+            control_scale=True
+        )
         
-        # Pridanie parcely ako polygon s profesionálnym vzhľadom
-        fig.add_trace(go.Scattermapbox(
-            lon=[],
-            lat=[],
-            mode='markers',
-            marker=dict(size=0),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Pridanie parcely ako polygon s farebným kódovaním podľa výnosov
+        # Pridanie parcely s farebným kódovaním podľa výnosov
         if not parcel_data.empty:
             # Výpočet priemerného výnosu pre farebné kódovanie
             avg_yield = parcel_data['yield_ha'].mean()
@@ -205,39 +205,32 @@ def create_parcel_map(df, selected_parcel):
                 parcel_color = '#DC143C'  # Karmínová - slabá
             
             # Pridanie parcely ako polygon
-            fig.add_trace(go.Scattermapbox(
-                lon=[],
-                lat=[],
-                mode='markers',
-                marker=dict(size=0),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
-        
-        # Nastavenie layoutu mapy
-        fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",  # Profesionálny štýl mapy
-                center=dict(lat=center_lat, lon=center_lon),
-                zoom=zoom_level,
-                layers=[
-                    {
-                        "sourcetype": "geojson",
-                        "source": gdf.__geo_interface__,
-                        "type": "fill",
-                        "color": parcel_color if 'parcel_color' in locals() else '#1f77b4',
-                        "opacity": 0.7,
-                        "filloutline": {
-                            "color": "#000000",
-                            "width": 2
-                        }
-                    }
-                ]
-            ),
-            height=600,
-            margin={"r": 0, "t": 0, "l": 0, "b": 0},
-            showlegend=False
-        )
+            folium.GeoJson(
+                gdf,
+                style_function=lambda x: {
+                    'fillColor': parcel_color,
+                    'color': '#000000',
+                    'weight': 2,
+                    'fillOpacity': 0.7
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['name'],
+                    aliases=['Parcela:'],
+                    localize=True,
+                    sticky=False,
+                    labels=True,
+                    style="""
+                        background-color: rgba(0, 0, 0, 0.8);
+                        border: 2px solid white;
+                        border-radius: 5px;
+                        box-shadow: 3px;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 12px;
+                        padding: 5px;
+                    """
+                )
+            ).add_to(m)
         
         # Pridanie informačného boxu
         if not parcel_data.empty:
@@ -248,27 +241,26 @@ def create_parcel_map(df, selected_parcel):
             crop_count = parcel_data['crop'].nunique()
             year_range = f"{parcel_data['year'].min()} - {parcel_data['year'].max()}"
             
-            # Pridanie anotácie s informáciami o parcele
-            fig.add_annotation(
-                x=0.02,
-                y=0.98,
-                xref="paper",
-                yref="paper",
-                text=f"<b>Parcela: {selected_parcel}</b><br>" +
-                     f"Plocha: {total_area:.2f} ha<br>" +
-                     f"Priemerný výnos: {avg_yield:.2f} t/ha<br>" +
-                     f"Výnosnosť: {avg_percentage:.1f}%<br>" +
-                     f"Počet plodín: {crop_count}<br>" +
-                     f"Obdobie: {year_range}",
-                showarrow=False,
-                bgcolor="rgba(255, 255, 255, 0.9)",
-                bordercolor="rgba(0, 0, 0, 0.5)",
-                borderwidth=1,
-                font=dict(size=12, color="black"),
-                align="left"
-            )
+            # Pridanie informačného boxu
+            info_html = f"""
+            <div style="position: fixed; 
+                        top: 10px; left: 10px; width: 300px; height: auto; 
+                        background-color: white; border:2px solid grey; z-index:9999; 
+                        font-size:14px; padding: 10px; border-radius: 5px;">
+                <h4>Parcela: {selected_parcel}</h4>
+                <p><b>Plocha:</b> {total_area:.2f} ha</p>
+                <p><b>Priemerný výnos:</b> {avg_yield:.2f} t/ha</p>
+                <p><b>Výnosnosť:</b> {avg_percentage:.1f}%</p>
+                <p><b>Počet plodín:</b> {crop_count}</p>
+                <p><b>Obdobie:</b> {year_range}</p>
+            </div>
+            """
+            m.get_root().html.add_child(folium.Element(info_html))
         
-        return fig
+        # Pridanie fullscreen tlačidla
+        plugins.Fullscreen().add_to(m)
+        
+        return m
         
     except Exception as e:
         st.error(f"Chyba pri vytváraní mapy parcely: {e}")
@@ -310,18 +302,41 @@ def create_enhanced_parcel_map(df, selected_parcel):
         else:
             zoom_level = 18
         
-        # Vytvorenie mapy pomocou plotly s datovým vzhľadom
-        fig = go.Figure()
+        # Vytvorenie mapy pomocou folium s datovým vzhľadom
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=zoom_level,
+            tiles='CartoDB positron',  # Čistý, datový štýl bez satelitného pozadia
+            control_scale=True
+        )
         
-        # Pridanie parcely ako polygon s datovým vzhľadom
-        fig.add_trace(go.Scattermapbox(
-            lon=[],
-            lat=[],
-            mode='markers',
-            marker=dict(size=0),
-            showlegend=False,
-            hoverinfo='skip'
-        ))
+        # Pridanie parcely s farebným kódovaním
+        folium.GeoJson(
+            gdf,
+            style_function=lambda x: {
+                'fillColor': parcel_color if 'parcel_color' in locals() else '#1f77b4',
+                'color': '#000000',
+                'weight': 3,
+                'fillOpacity': 0.8
+            },
+            tooltip=folium.GeoJsonTooltip(
+                fields=['name'],
+                aliases=['Parcela:'],
+                localize=True,
+                sticky=False,
+                labels=True,
+                style="""
+                    background-color: rgba(0, 0, 0, 0.8);
+                    border: 2px solid white;
+                    border-radius: 5px;
+                    box-shadow: 3px;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                """
+            )
+        ).add_to(m)
         
         # Výpočet metrík pre farebné kódovanie a informácie
         if not parcel_data.empty:
@@ -363,32 +378,41 @@ def create_enhanced_parcel_map(df, selected_parcel):
                 performance_level = "Slabá"
                 performance_score = "D"
         
-        # Nastavenie layoutu mapy s datovým vzhľadom
-        fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",  # Čistý, datový štýl bez satelitného pozadia
-                center=dict(lat=center_lat, lon=center_lon),
-                zoom=zoom_level,
-                layers=[
-                    {
-                        "sourcetype": "geojson",
-                        "source": gdf.__geo_interface__,
-                        "type": "fill",
-                        "color": parcel_color if 'parcel_color' in locals() else '#1f77b4',
-                        "opacity": 0.8,
-                        "filloutline": {
-                            "color": "#000000",
-                            "width": 3
-                        }
-                    }
-                ]
-            ),
-            height=700,
-            margin={"r": 0, "t": 0, "l": 0, "b": 0},
-            showlegend=False,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        # Vytvorenie mapy pomocou folium s datovým vzhľadom
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=zoom_level,
+            tiles='CartoDB positron',  # Čistý, datový štýl bez satelitného pozadia
+            control_scale=True
         )
+        
+        # Pridanie parcely s farebným kódovaním
+        folium.GeoJson(
+            gdf,
+            style_function=lambda x: {
+                'fillColor': parcel_color if 'parcel_color' in locals() else '#1f77b4',
+                'color': '#000000',
+                'weight': 3,
+                'fillOpacity': 0.8
+            },
+            tooltip=folium.GeoJsonTooltip(
+                fields=['name'],
+                aliases=['Parcela:'],
+                localize=True,
+                sticky=False,
+                labels=True,
+                style="""
+                    background-color: rgba(0, 0, 0, 0.8);
+                    border: 2px solid white;
+                    border-radius: 5px;
+                    box-shadow: 3px;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 5px;
+                """
+            )
+        ).add_to(m)
         
         # Pridanie mriežky pre datový vzhľad
         # Vytvorenie mriežky okolo parcely
@@ -397,131 +421,106 @@ def create_enhanced_parcel_map(df, selected_parcel):
         # Pridanie vertikálnych čiar mriežky
         for i in range(11):
             lon_pos = bounds[0] + i * grid_spacing
-            fig.add_trace(go.Scattermapbox(
-                lon=[lon_pos, lon_pos],
-                lat=[bounds[1], bounds[3]],
-                mode='lines',
-                line=dict(color='rgba(128, 128, 128, 0.3)', width=1),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            folium.PolyLine(
+                locations=[[bounds[1], lon_pos], [bounds[3], lon_pos]],
+                color='rgba(128, 128, 128, 0.3)',
+                weight=1,
+                opacity=0.3
+            ).add_to(m)
         
         # Pridanie horizontálnych čiar mriežky
         for i in range(11):
             lat_pos = bounds[1] + i * grid_spacing
-            fig.add_trace(go.Scattermapbox(
-                lon=[bounds[0], bounds[2]],
-                lat=[lat_pos, lat_pos],
-                mode='lines',
-                line=dict(color='rgba(128, 128, 128, 0.3)', width=1),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            folium.PolyLine(
+                locations=[[lat_pos, bounds[0]], [lat_pos, bounds[2]]],
+                color='rgba(128, 128, 128, 0.3)',
+                weight=1,
+                opacity=0.3
+            ).add_to(m)
         
         # Pridanie súradníc mriežky
         for i in range(11):
             for j in range(11):
                 lon_pos = bounds[0] + i * grid_spacing
                 lat_pos = bounds[1] + j * grid_spacing
-                fig.add_trace(go.Scattermapbox(
-                    lon=[lon_pos],
-                    lat=[lat_pos],
-                    mode='markers',
-                    marker=dict(size=2, color='rgba(128, 128, 128, 0.5)'),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ))
+                folium.CircleMarker(
+                    location=[lat_pos, lon_pos],
+                    radius=2,
+                    color='rgba(128, 128, 128, 0.5)',
+                    fill=True,
+                    fillColor='rgba(128, 128, 128, 0.5)',
+                    fillOpacity=0.5
+                ).add_to(m)
         
         # Pridanie hlavného informačného boxu s datami
         if not parcel_data.empty:
-            fig.add_annotation(
-                x=0.02,
-                y=0.98,
-                xref="paper",
-                yref="paper",
-                text=f"<b>🏞️ {selected_parcel}</b><br>" +
-                     f"<b>Výkonnosť:</b> {performance_level} ({performance_score})<br>" +
-                     f"<b>Výnosnosť:</b> {avg_percentage:.1f}%<br>" +
-                     f"<b>Priemerný výnos:</b> {avg_yield:.2f} t/ha<br>" +
-                     f"<b>Celková plocha:</b> {total_area:.2f} ha<br>" +
-                     f"<b>Počet plodín:</b> {crop_count}<br>" +
-                     f"<b>Obdobie:</b> {year_range}",
-                showarrow=False,
-                bgcolor="rgba(255, 255, 255, 0.95)",
-                bordercolor=parcel_color if 'parcel_color' in locals() else '#1f77b4',
-                borderwidth=2,
-                font=dict(size=13, color="black"),
-                align="left",
-                xanchor="left",
-                yanchor="top"
-            )
+            info_html = f"""
+            <div style="position: fixed; 
+                        top: 10px; left: 10px; width: 350px; height: auto; 
+                        background-color: white; border:2px solid {parcel_color if 'parcel_color' in locals() else '#1f77b4'}; z-index:9999; 
+                        font-size:14px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+                <h4>🏞️ {selected_parcel}</h4>
+                <p><b>Výkonnosť:</b> {performance_level} ({performance_score})</p>
+                <p><b>Výnosnosť:</b> {avg_percentage:.1f}%</p>
+                <p><b>Priemerný výnos:</b> {avg_yield:.2f} t/ha</p>
+                <p><b>Celková plocha:</b> {total_area:.2f} ha</p>
+                <p><b>Počet plodín:</b> {crop_count}</p>
+                <p><b>Obdobie:</b> {year_range}</p>
+            </div>
+            """
+            m.get_root().html.add_child(folium.Element(info_html))
             
             # Pridanie štatistického boxu s detailnými metrikami
-            fig.add_annotation(
-                x=0.98,
-                y=0.98,
-                xref="paper",
-                yref="paper",
-                text=f"<b>📊 Štatistiky parcely:</b><br>" +
-                     f"<b>Variabilita (CV):</b> {yield_cv:.1f}%<br>" +
-                     f"<b>Najlepší rok:</b> {best_year['year']} ({best_year['crop']})<br>" +
-                     f"<b>Najhorší rok:</b> {worst_year['year']} ({worst_year['crop']})<br>" +
-                     f"<b>Rozsah výnosov:</b> {worst_year['yield_ha']:.2f} - {best_year['yield_ha']:.2f} t/ha<br>" +
-                     f"<b>Počet záznamov:</b> {len(parcel_data)}",
-                showarrow=False,
-                bgcolor="rgba(255, 255, 255, 0.95)",
-                bordercolor="rgba(0, 0, 0, 0.5)",
-                borderwidth=1,
-                font=dict(size=11, color="black"),
-                align="right",
-                xanchor="right",
-                yanchor="top"
-            )
+            stats_html = f"""
+            <div style="position: fixed; 
+                        top: 10px; right: 10px; width: 350px; height: auto; 
+                        background-color: white; border:2px solid rgba(0,0,0,0.5); z-index:9999; 
+                        font-size:12px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+                <h4>📊 Štatistiky parcely:</h4>
+                <p><b>Variabilita (CV):</b> {yield_cv:.1f}%</p>
+                <p><b>Najlepší rok:</b> {best_year['year']} ({best_year['crop']})</p>
+                <p><b>Najhorší rok:</b> {worst_year['year']} ({worst_year['crop']})</p>
+                <p><b>Rozsah výnosov:</b> {worst_year['yield_ha']:.2f} - {best_year['yield_ha']:.2f} t/ha</p>
+                <p><b>Počet záznamov:</b> {len(parcel_data)}</p>
+            </div>
+            """
+            m.get_root().html.add_child(folium.Element(stats_html))
             
             # Pridanie legendy pre farebné kódovanie
-            fig.add_annotation(
-                x=0.02,
-                y=0.02,
-                xref="paper",
-                yref="paper",
-                text="<b>🎨 Farebné kódovanie výnosnosti:</b><br>" +
-                     "🟢 ≥130% - Výborná (A+)<br>" +
-                     "🟢 ≥115% - Veľmi dobrá (A)<br>" +
-                     "🟢 ≥100% - Dobrá (B+)<br>" +
-                     "🟡 ≥85% - Priemerná (B)<br>" +
-                     "🟠 ≥70% - Podpriemerná (C)<br>" +
-                     "🔴 <70% - Slabá (D)",
-                showarrow=False,
-                bgcolor="rgba(255, 255, 255, 0.9)",
-                bordercolor="rgba(0, 0, 0, 0.3)",
-                borderwidth=1,
-                font=dict(size=11, color="black"),
-                align="left",
-                xanchor="left",
-                yanchor="bottom"
-            )
+            legend_html = """
+            <div style="position: fixed; 
+                        bottom: 10px; left: 10px; width: 300px; height: auto; 
+                        background-color: white; border:2px solid rgba(0,0,0,0.3); z-index:9999; 
+                        font-size:11px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+                <h4>🎨 Farebné kódovanie výnosnosti:</h4>
+                <p>🟢 ≥130% - Výborná (A+)</p>
+                <p>🟢 ≥115% - Veľmi dobrá (A)</p>
+                <p>🟢 ≥100% - Dobrá (B+)</p>
+                <p>🟡 ≥85% - Priemerná (B)</p>
+                <p>🟠 ≥70% - Podpriemerná (C)</p>
+                <p>🔴 <70% - Slabá (D)</p>
+            </div>
+            """
+            m.get_root().html.add_child(folium.Element(legend_html))
             
             # Pridanie súradníc parcely
-            fig.add_annotation(
-                x=0.98,
-                y=0.02,
-                xref="paper",
-                yref="paper",
-                text=f"<b>📍 Súradnice parcely:</b><br>" +
-                     f"Stred: {center_lat:.6f}°N, {center_lon:.6f}°E<br>" +
-                     f"Rozmer: {lon_range:.6f}° × {lat_range:.6f}°<br>" +
-                     f"Zoom: {zoom_level}",
-                showarrow=False,
-                bgcolor="rgba(255, 255, 255, 0.9)",
-                bordercolor="rgba(0, 0, 0, 0.3)",
-                borderwidth=1,
-                font=dict(size=11, color="black"),
-                align="right",
-                xanchor="right",
-                yanchor="bottom"
-            )
+            coords_html = f"""
+            <div style="position: fixed; 
+                        bottom: 10px; right: 10px; width: 300px; height: auto; 
+                        background-color: white; border:2px solid rgba(0,0,0,0.3); z-index:9999; 
+                        font-size:11px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+                <h4>📍 Súradnice parcely:</h4>
+                <p>Stred: {center_lat:.6f}°N, {center_lon:.6f}°E</p>
+                <p>Rozmer: {lon_range:.6f}° × {lat_range:.6f}°</p>
+                <p>Zoom: {zoom_level}</p>
+            </div>
+            """
+            m.get_root().html.add_child(folium.Element(coords_html))
         
-        return fig
+        # Pridanie fullscreen tlačidla
+        plugins.Fullscreen().add_to(m)
+        
+        return m
         
     except Exception as e:
         st.error(f"Chyba pri vytváraní datovej mapy parcely: {e}")
@@ -575,8 +574,13 @@ def create_all_parcels_map(df):
         center_lon = (bounds[0] + bounds[2]) / 2
         center_lat = (bounds[1] + bounds[3]) / 2
         
-        # Vytvorenie mapy s datovým vzhľadom
-        fig = go.Figure()
+        # Vytvorenie mapy pomocou folium s datovým vzhľadom
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=10,
+            tiles='CartoDB positron',  # Čistý, datový štýl bez satelitného pozadia
+            control_scale=True
+        )
         
         # Pridanie všetkých parciel s farebným kódovaním
         for idx, row in gdf.iterrows():
@@ -595,47 +599,84 @@ def create_all_parcels_map(df):
                 color = '#DC143C'  # Karmínová
             
             # Pridanie parcely
-            fig.add_trace(go.Scattermapbox(
-                lon=[],
-                lat=[],
-                mode='markers',
-                marker=dict(size=0),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            folium.GeoJson(
+                gdf.iloc[[idx]],
+                style_function=lambda x: {
+                    'fillColor': color,
+                    'color': '#000000',
+                    'weight': 1,
+                    'fillOpacity': 0.7
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['name', 'avg_yield_percentage', 'total_area'],
+                    aliases=['Parcela:', 'Výnosnosť (%):', 'Plocha (ha):'],
+                    localize=True,
+                    sticky=False,
+                    labels=True,
+                    style="""
+                        background-color: rgba(0, 0, 0, 0.8);
+                        border: 2px solid white;
+                        border-radius: 5px;
+                        box-shadow: 3px;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 12px;
+                        padding: 5px;
+                    """
+                )
+            ).add_to(m)
         
-        # Nastavenie layoutu mapy s datovým vzhľadom
-        fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",  # Čistý, datový štýl bez satelitného pozadia
-                center=dict(lat=center_lat, lon=center_lon),
-                zoom=10,
-                layers=[
-                    {
-                        "sourcetype": "geojson",
-                        "source": gdf.__geo_interface__,
-                        "type": "fill",
-                        "color": gdf['avg_yield_percentage'].apply(lambda x: 
-                            '#006400' if x >= 130 else
-                            '#228B22' if x >= 115 else
-                            '#32CD32' if x >= 100 else
-                            '#FFD700' if x >= 85 else
-                            '#FF8C00' if x >= 70 else '#DC143C'
-                        ).tolist(),
-                        "opacity": 0.7,
-                        "filloutline": {
-                            "color": "#000000",
-                            "width": 1
-                        }
-                    }
-                ]
-            ),
-            height=700,
-            margin={"r": 0, "t": 0, "l": 0, "b": 0},
-            showlegend=False,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        # Vytvorenie mapy pomocou folium s datovým vzhľadom
+        m = folium.Map(
+            location=[center_lat, center_lon],
+            zoom_start=10,
+            tiles='CartoDB positron',  # Čistý, datový štýl bez satelitného pozadia
+            control_scale=True
         )
+        
+        # Pridanie všetkých parciel s farebným kódovaním
+        for idx, row in gdf.iterrows():
+            # Farebné kódovanie podľa výnosnosti
+            if row['avg_yield_percentage'] >= 130:
+                color = '#006400'  # Tmavozelená
+            elif row['avg_yield_percentage'] >= 115:
+                color = '#228B22'  # Forest green
+            elif row['avg_yield_percentage'] >= 100:
+                color = '#32CD32'  # Limetkovozelená
+            elif row['avg_yield_percentage'] >= 85:
+                color = '#FFD700'  # Zlatá
+            elif row['avg_yield_percentage'] >= 70:
+                color = '#FF8C00'  # Tmavooranžová
+            else:
+                color = '#DC143C'  # Karmínová
+            
+            # Pridanie parcely
+            folium.GeoJson(
+                gdf.iloc[[idx]],
+                style_function=lambda x: {
+                    'fillColor': color,
+                    'color': '#000000',
+                    'weight': 1,
+                    'fillOpacity': 0.7
+                },
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['name', 'avg_yield_percentage', 'total_area'],
+                    aliases=['Parcela:', 'Výnosnosť (%):', 'Plocha (ha):'],
+                    localize=True,
+                    sticky=False,
+                    labels=True,
+                    style="""
+                        background-color: rgba(0, 0, 0, 0.8);
+                        border: 2px solid white;
+                        border-radius: 5px;
+                        box-shadow: 3px;
+                        color: white;
+                        font-weight: bold;
+                        font-size: 12px;
+                        padding: 5px;
+                    """
+                )
+            ).add_to(m)
         
         # Pridanie mriežky pre datový vzhľad
         # Výpočet rozmerov oblasti
@@ -646,63 +687,53 @@ def create_all_parcels_map(df):
         # Pridanie vertikálnych čiar mriežky
         for i in range(21):
             lon_pos = bounds[0] + i * grid_spacing
-            fig.add_trace(go.Scattermapbox(
-                lon=[lon_pos, lon_pos],
-                lat=[bounds[1], bounds[3]],
-                mode='lines',
-                line=dict(color='rgba(128, 128, 128, 0.2)', width=0.5),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            folium.PolyLine(
+                locations=[[bounds[1], lon_pos], [bounds[3], lon_pos]],
+                color='rgba(128, 128, 128, 0.2)',
+                weight=0.5,
+                opacity=0.2
+            ).add_to(m)
         
         # Pridanie horizontálnych čiar mriežky
         for i in range(21):
             lat_pos = bounds[1] + i * grid_spacing
-            fig.add_trace(go.Scattermapbox(
-                lon=[bounds[0], bounds[2]],
-                lat=[lat_pos, lat_pos],
-                mode='lines',
-                line=dict(color='rgba(128, 128, 128, 0.2)', width=0.5),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
+            folium.PolyLine(
+                locations=[[lat_pos, bounds[0]], [lat_pos, bounds[2]]],
+                color='rgba(128, 128, 128, 0.2)',
+                weight=0.5,
+                opacity=0.2
+            ).add_to(m)
         
         # Pridanie súradníc mriežky (menej husté pre prehľadnosť)
         for i in range(0, 21, 2):  # Každý druhý bod
             for j in range(0, 21, 2):
                 lon_pos = bounds[0] + i * grid_spacing
                 lat_pos = bounds[1] + j * grid_spacing
-                fig.add_trace(go.Scattermapbox(
-                    lon=[lon_pos],
-                    lat=[lat_pos],
-                    mode='markers',
-                    marker=dict(size=1, color='rgba(128, 128, 128, 0.3)'),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ))
+                folium.CircleMarker(
+                    location=[lat_pos, lon_pos],
+                    radius=1,
+                    color='rgba(128, 128, 128, 0.3)',
+                    fill=True,
+                    fillColor='rgba(128, 128, 128, 0.3)',
+                    fillOpacity=0.3
+                ).add_to(m)
         
         # Pridanie hlavnej legendy s farebným kódovaním
-        fig.add_annotation(
-            x=0.98,
-            y=0.98,
-            xref="paper",
-            yref="paper",
-            text="<b>🎨 Farebné kódovanie parciel:</b><br>" +
-                 "🟢 ≥130% - Výborná (A+)<br>" +
-                 "🟢 ≥115% - Veľmi dobrá (A)<br>" +
-                 "🟢 ≥100% - Dobrá (B+)<br>" +
-                 "🟡 ≥85% - Priemerná (B)<br>" +
-                 "🟠 ≥70% - Podpriemerná (C)<br>" +
-                 "🔴 <70% - Slabá (D)",
-            showarrow=False,
-            bgcolor="rgba(255, 255, 255, 0.95)",
-            bordercolor="rgba(0, 0, 0, 0.5)",
-            borderwidth=2,
-            font=dict(size=12, color="black"),
-            align="right",
-            xanchor="right",
-            yanchor="top"
-        )
+        legend_html = """
+        <div style="position: fixed; 
+                    top: 10px; right: 10px; width: 300px; height: auto; 
+                    background-color: white; border:2px solid rgba(0,0,0,0.5); z-index:9999; 
+                    font-size:12px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+            <h4>🎨 Farebné kódovanie parciel:</h4>
+            <p>🟢 ≥130% - Výborná (A+)</p>
+            <p>🟢 ≥115% - Veľmi dobrá (A)</p>
+            <p>🟢 ≥100% - Dobrá (B+)</p>
+            <p>🟡 ≥85% - Priemerná (B)</p>
+            <p>🟠 ≥70% - Podpriemerná (C)</p>
+            <p>🔴 <70% - Slabá (D)</p>
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(legend_html))
         
         # Pridanie detailných štatistík všetkých parciel
         total_parcels = len(parcel_stats)
@@ -710,67 +741,52 @@ def create_all_parcels_map(df):
         best_parcel = parcel_stats.loc[parcel_stats['avg_yield_percentage'].idxmax()]
         worst_parcel = parcel_stats.loc[parcel_stats['avg_yield_percentage'].idxmin()]
         
-        fig.add_annotation(
-            x=0.02,
-            y=0.98,
-            xref="paper",
-            yref="paper",
-            text=f"<b>📊 Prehľad všetkých parciel:</b><br>" +
-                 f"Celkový počet: {total_parcels}<br>" +
-                 f"Priemerná výnosnosť: {avg_performance:.1f}%<br>" +
-                 f"Rozsah rokov: {parcel_stats['year_min'].min()} - {parcel_stats['year_max'].max()}<br>" +
-                 f"Celková plocha: {parcel_stats['total_area'].sum():.1f} ha",
-            showarrow=False,
-            bgcolor="rgba(255, 255, 255, 0.95)",
-            bordercolor="rgba(0, 0, 0, 0.5)",
-            borderwidth=2,
-            font=dict(size=12, color="black"),
-            align="left",
-            xanchor="left",
-            yanchor="top"
-        )
+        stats_html = f"""
+        <div style="position: fixed; 
+                    top: 10px; left: 10px; width: 350px; height: auto; 
+                    background-color: white; border:2px solid rgba(0,0,0,0.5); z-index:9999; 
+                    font-size:12px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+            <h4>📊 Prehľad všetkých parciel:</h4>
+            <p>Celkový počet: {total_parcels}</p>
+            <p>Priemerná výnosnosť: {avg_performance:.1f}%</p>
+            <p>Rozsah rokov: {parcel_stats['year_min'].min()} - {parcel_stats['year_max'].max()}</p>
+            <p>Celková plocha: {parcel_stats['total_area'].sum():.1f} ha</p>
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(stats_html))
         
         # Pridanie informácií o najlepšej a najhoršej parcele
-        fig.add_annotation(
-            x=0.02,
-            y=0.02,
-            xref="paper",
-            yref="paper",
-            text=f"<b>🏆 Najlepšia parcela:</b> {best_parcel['name']}<br>" +
-                 f"Výnosnosť: {best_parcel['avg_yield_percentage']:.1f}%<br>" +
-                 f"<b>⚠️ Najhoršia parcela:</b> {worst_parcel['name']}<br>" +
-                 f"Výnosnosť: {worst_parcel['avg_yield_percentage']:.1f}%",
-            showarrow=False,
-            bgcolor="rgba(255, 255, 255, 0.9)",
-            bordercolor="rgba(0, 0, 0, 0.3)",
-            borderwidth=1,
-            font=dict(size=11, color="black"),
-            align="left",
-            xanchor="left",
-            yanchor="bottom"
-        )
+        best_worst_html = f"""
+        <div style="position: fixed; 
+                    bottom: 10px; left: 10px; width: 350px; height: auto; 
+                    background-color: white; border:2px solid rgba(0,0,0,0.3); z-index:9999; 
+                    font-size:11px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+            <h4>🏆 Najlepšia parcela: {best_parcel['name']}</h4>
+            <p>Výnosnosť: {best_parcel['avg_yield_percentage']:.1f}%</p>
+            <h4>⚠️ Najhoršia parcela: {worst_parcel['name']}</h4>
+            <p>Výnosnosť: {worst_parcel['avg_yield_percentage']:.1f}%</p>
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(best_worst_html))
         
         # Pridanie súradníc oblasti
-        fig.add_annotation(
-            x=0.98,
-            y=0.02,
-            xref="paper",
-            yref="paper",
-            text=f"<b>📍 Súradnice oblasti:</b><br>" +
-                 f"Stred: {center_lat:.6f}°N, {center_lon:.6f}°E<br>" +
-                 f"Rozmer: {lon_range:.6f}° × {lat_range:.6f}°<br>" +
-                 f"Zoom: 10",
-            showarrow=False,
-            bgcolor="rgba(255, 255, 255, 0.9)",
-            bordercolor="rgba(0, 0, 0, 0.3)",
-            borderwidth=1,
-            font=dict(size=11, color="black"),
-            align="right",
-            xanchor="right",
-            yanchor="bottom"
-        )
+        coords_html = f"""
+        <div style="position: fixed; 
+                    bottom: 10px; right: 10px; width: 300px; height: auto; 
+                    background-color: white; border:2px solid rgba(0,0,0,0.3); z-index:9999; 
+                    font-size:11px; padding: 15px; border-radius: 5px; box-shadow: 3px 3px 10px rgba(0,0,0,0.3);">
+            <h4>📍 Súradnice oblasti:</h4>
+            <p>Stred: {center_lat:.6f}°N, {center_lon:.6f}°E</p>
+            <p>Rozmer: {lon_range:.6f}° × {lat_range:.6f}°</p>
+            <p>Zoom: 10</p>
+        </div>
+        """
+        m.get_root().html.add_child(folium.Element(coords_html))
         
-        return fig
+        # Pridanie fullscreen tlačidla
+        plugins.Fullscreen().add_to(m)
+        
+        return m
         
     except Exception as e:
         st.error(f"Chyba pri vytváraní datovej mapy všetkých parciel: {e}")
@@ -874,7 +890,9 @@ def show_parcel_statistics(df):
     with st.spinner("Generujem datovú mapu všetkých parciel s mriežkou..."):
         all_parcels_map = create_all_parcels_map(df)
         if all_parcels_map:
-            st.plotly_chart(all_parcels_map, use_container_width=True)
+            # Pre folium mapu používame st.components.html
+            folium_static = all_parcels_map._repr_html_()
+            st.components.v1.html(folium_static, height=700)
             
             # Štatistiky parciel
             parcels_with_geometry = df[df['geometry'].notna()].copy()
@@ -922,7 +940,9 @@ def show_parcel_statistics(df):
             map_fig = create_parcel_map(df, selected_parcel)
             
         if map_fig:
-            st.plotly_chart(map_fig, use_container_width=True)
+            # Pre folium mapu používame st.components.html
+            folium_static = map_fig._repr_html_()
+            st.components.v1.html(folium_static, height=700)
             
             # Pridanie informácií o mape
             if map_type == "Datová mapa s mriežkou (odporúčané)":

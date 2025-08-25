@@ -8,6 +8,7 @@ warnings.filterwarnings('ignore')
 from modules.data_loader import load_data, calculate_yield_percentage
 from modules.enterprise_stats import show_enterprise_statistics
 from modules.parcel_stats import show_parcel_statistics
+from modules.crop_stats import show_crop_statistics
 
 # Konfigurácia stránky
 st.set_page_config(
@@ -100,14 +101,18 @@ def main():
     # Menu s kartami
     st.header("📋 Menu aplikácie")
     
-    # Vytvorenie dvoch stĺpcov pre menu karty
-    col1, col2 = st.columns(2)
+    # Vytvorenie troch stĺpcov pre menu karty
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("🏢 Štatistiky na úrovni podniku", key="enterprise_tab", use_container_width=True):
             st.session_state.active_tab = "enterprise"
     
     with col2:
+        if st.button("🌱 Štatistiky na úrovni plodiny", key="crop_tab", use_container_width=True):
+            st.session_state.active_tab = "crop"
+    
+    with col3:
         if st.button("🏞️ Štatistiky na úrovni parcely", key="parcel_tab", use_container_width=True):
             st.session_state.active_tab = "parcel"
     
@@ -118,6 +123,8 @@ def main():
     # Zobrazenie obsahu podľa vybranej karty
     if st.session_state.active_tab == "enterprise":
         show_enterprise_statistics(df, selected_crop)
+    elif st.session_state.active_tab == "crop":
+        show_crop_statistics(df, selected_crop)
     elif st.session_state.active_tab == "parcel":
         show_parcel_statistics(df)
 

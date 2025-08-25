@@ -7,99 +7,7 @@ import io
 import geopandas as gpd
 from shapely import wkt
 
-def create_yield_boxplot(df, crop_name):
-    """Vytvorenie boxplot grafu pre konkrétnu plodinu"""
-    crop_data = df[df['crop'] == crop_name].copy()
-    
-    if crop_data.empty:
-        return None
-    
-    # Výpočet celkového priemeru
-    overall_avg = crop_data['yield_ha'].mean()
-    
-    fig = go.Figure()
-    
-    # Boxplot pre každý rok
-    for year in sorted(crop_data['year'].unique()):
-        year_data = crop_data[crop_data['year'] == year]['yield_ha']
-        fig.add_trace(go.Box(
-            y=year_data,
-            name=str(year),
-            boxpoints='outliers',
-            jitter=0.3,
-            pointpos=-1.8
-        ))
-    
-    # Pridanie čiary celkového priemeru
-    fig.add_hline(
-        y=overall_avg,
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Priemer za obdobie: {overall_avg:.3f} t/ha"
-    )
-    
-    fig.update_layout(
-        title=f"Variabilita výnosov {crop_name} v rokoch {crop_data['year'].min()}-{crop_data['year'].max()}",
-        yaxis_title="Výnos (t/ha)",
-        xaxis_title="Rok",
-        showlegend=False,
-        height=500
-    )
-    
-    return fig
 
-def create_yield_trend(df, crop_name):
-    """Vytvorenie trendového grafu výnosov v čase"""
-    crop_data = df[df['crop'] == crop_name].copy()
-    
-    if crop_data.empty:
-        return None
-    
-    # Agregácia dát podľa roku
-    yearly_stats = crop_data.groupby('year').agg({
-        'yield_ha': ['mean', 'std', 'count']
-    }).reset_index()
-    
-    yearly_stats.columns = ['year', 'mean_yield', 'std_yield', 'count_parcels']
-    
-    fig = go.Figure()
-    
-    # Priemerný výnos s chybovými pruhmi
-    fig.add_trace(go.Scatter(
-        x=yearly_stats['year'],
-        y=yearly_stats['mean_yield'],
-        mode='lines+markers',
-        name='Priemerný výnos',
-        line=dict(color='blue', width=3),
-        marker=dict(size=8)
-    ))
-    
-    # Chybové pruhy (štandardná odchýlka)
-    fig.add_trace(go.Scatter(
-        x=yearly_stats['year'].tolist() + yearly_stats['year'].tolist()[::-1],
-        y=(yearly_stats['mean_yield'] + yearly_stats['std_yield']).tolist() + 
-           (yearly_stats['mean_yield'] - yearly_stats['std_yield']).tolist()[::-1],
-        fill='toself',
-        fillcolor='rgba(0,100,80,0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        name='±1 štandardná odchýlka'
-    ))
-    
-    fig.update_layout(
-        title=f"Trend výnosov {crop_name} v čase",
-        xaxis_title="Rok",
-        yaxis_title="Výnos (t/ha)",
-        height=400,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5
-        )
-    )
-    
-    return fig
 
 def create_parcel_performance_map(df):
     """Vytvorenie datovej a faktografickej mapy s výkonnosťou parciel s mriežkou a bez satelitného pozadia"""
@@ -292,18 +200,22 @@ def show_enterprise_statistics(df, selected_crop):
     if selected_crop:
         crop_data = df[df['crop'] == selected_crop]
         
-        # Grafy pre vybranú plodinu
-        col1, col2 = st.columns(2)
+        # Základné štatistiky pre vybranú plodinu
+        st.subheader("📊 Základné štatistiky")
+        
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            boxplot_fig = create_yield_boxplot(df, selected_crop)
-            if boxplot_fig:
-                st.plotly_chart(boxplot_fig, use_container_width=True)
+            st.metric("Počet záznamov", f"{len(crop_data):,}")
         
         with col2:
-            trend_fig = create_yield_trend(df, selected_crop)
-            if trend_fig:
-                st.plotly_chart(trend_fig, use_container_width=True)
+            st.metric("Počet parciel", f"{crop_data['agev_parcel_id'].nunique():,}")
+        
+        with col3:
+            st.metric("Priemerný výnos", f"{crop_data['yield_ha'].mean():.2f} t/ha")
+        
+        with col4:
+            st.metric("Obdobie", f"{crop_data['year'].min()} - {crop_data['year'].max()}")
     
     # Analýza výkonnosti parciel
     st.header("🏆 Výkonnosť parciel")
