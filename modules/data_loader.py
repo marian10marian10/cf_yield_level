@@ -2,13 +2,26 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
+import os
 
 @st.cache_data
 def load_data():
     """Načítanie dát z CSV súboru"""
     try:
+        # Získanie absolútnej cesty k CSV súboru
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        csv_path = os.path.join(parent_dir, 'yield_data.csv')
+        
+        # Kontrola, či súbor existuje
+        if not os.path.exists(csv_path):
+            # Fallback - skúsiť relatívnu cestu
+            csv_path = 'yield_data.csv'
+            if not os.path.exists(csv_path):
+                raise FileNotFoundError(f"CSV súbor nebol nájdený na ceste: {csv_path}")
+        
         # Načítanie CSV súboru
-        df = pd.read_csv('yield_data.csv', encoding='utf-8')
+        df = pd.read_csv(csv_path, encoding='utf-8')
         
         # Konverzia dátových typov
         df['year'] = pd.to_numeric(df['year'], errors='coerce')
