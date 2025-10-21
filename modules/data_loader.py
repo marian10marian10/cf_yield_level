@@ -5,9 +5,6 @@ import re
 import os
 import psycopg2
 from sqlalchemy import create_engine
-import geopandas as gpd
-from shapely import wkt
-import binascii
 
 # Database connection parameters
 DB_USER_DESTINATION = 'db_admin'
@@ -38,7 +35,7 @@ def load_data():
         available_columns = columns_df['column_name'].tolist()
         
         # Debug informácie
-        st.write("🔍 Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
+        st.write("Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
         st.dataframe(columns_df)
         
         # Dynamické vytvorenie SELECT query na základe dostupných stĺpcov
@@ -49,18 +46,18 @@ def load_data():
             if col in available_columns:
                 select_columns.append(col)
             else:
-                st.warning(f"⚠️ Stĺpec '{col}' neexistuje v tabuľke!")
+                st.warning(f"Stĺpec '{col}' neexistuje v tabuľke!")
         
         # Pridanie area ak existuje
         if 'area' in available_columns:
             select_columns.append('area')
         
-        # Vytvorenie SQL query
+        # Vytvorenie SQL query s filtrom na sezónu '24_25'
         columns_str = ', '.join(select_columns)
         query = f"""
         SELECT {columns_str}
         FROM yield_level.skeagis_yields
-        WHERE yield_ha > 0
+        WHERE yield_ha > 0 AND season = '24_25'
         ORDER BY season, parcel_id
         """
         
@@ -99,200 +96,35 @@ def load_data():
         """
         
         geometry_columns_df = pd.read_sql(geometry_columns_query, engine)
-        st.write("🔍 Dostupné stĺpce v tabuľke yield_level.cf_parcel_season:")
+        st.write("Dostupné stĺpce v tabuľke yield_level.cf_parcel_season:")
         st.dataframe(geometry_columns_df)
         
-        # Načítanie geometrie z yield_level.cf_parcel_season
-        geometry_query = """
+        # Načítanie geometrie z yield_level.cf_parcel_season s PostGIS transformáciou
+        st.write("Načítavam geometrie pomocou PostGIS funkcií...")
+        
+        geometry_query_postgis = """
         SELECT 
             parcel_id,
-            geometry
+            ST_AsText(ST_Transform(geometry, 4326)) as geometry_wgs84
         FROM yield_level.cf_parcel_season
+        WHERE geometry IS NOT NULL
         """
         
-        geometry_df = pd.read_sql(geometry_query, engine)
+        geometry_df_postgis = pd.read_sql(geometry_query_postgis, engine)
         
         # Spojenie dát s geometriou
-        df = df.merge(geometry_df, on='parcel_id', how='left')
-        
-        # Konverzia geometry na string pre kompatibilitu
-        # Geometrie sú v hex formáte v EPSG:5514, musíme ich transformovať na WGS84 (EPSG:4326)
-        def convert_geometry_to_wgs84(geom_data):
-            try:
-                if pd.isna(geom_data) or geom_data is None:
-                    return None
-                
-                # Ak je už string, skúsime ho parsovať
-                if isinstance(geom_data, str):
-                    # Skontrolujeme, či je to už WKT formát
-                    if geom_data.startswith(('POLYGON', 'MULTIPOLYGON', 'POINT', 'LINESTRING')):
-                        try:
-                            # Parsujeme geometriu
-                            geom = wkt.loads(geom_data)
-                            
-                            # Skontrolujeme, či je geometria validná
-                            if not geom.is_valid:
-                                print(f"Nevalidná geometria: {geom_data[:100]}...")
-                                return None
-                            
-                            # Vytvoríme GeoDataFrame s EPSG:5514
-                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
-                            
-                            # Transformujeme na WGS84 (EPSG:4326)
-                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
-                            
-                            # Skontrolujeme výsledok
-                            if gdf_wgs84.geometry.iloc[0] is None:
-                                print(f"Transformácia zlyhala pre geometriu: {geom_data[:100]}...")
-                                return None
-                            
-                            # Vrátime WKT formát
-                            return gdf_wgs84.geometry.iloc[0].wkt
-                        except Exception as transform_error:
-                            print(f"Chyba pri transformácii geometrie: {transform_error}")
-                            print(f"Problémová geometria: {geom_data[:100]}...")
-                            return None
-                    
-                    # Ak je to hex string (začína s "01030000208A150000")
-                    if geom_data.startswith('01030000208A150000') or len(geom_data) > 100:
-                        try:
-                            # Odstránime prípadné medzery a nové riadky
-                            clean_hex = geom_data.replace(' ', '').replace('\n', '').replace('\r', '')
-                            
-                            # Dekódujeme hex na bytes
-                            wkb_bytes = binascii.unhexlify(clean_hex)
-                            
-                            # Parsujeme WKB geometriu
-                            geom = wkt.loads(wkb_bytes)
-                            
-                            # Skontrolujeme validitu
-                            if not geom.is_valid:
-                                print(f"Nevalidná geometria po hex dekódovaní: {geom_data[:50]}...")
-                                return None
-                            
-                            # Vytvoríme GeoDataFrame s EPSG:5514
-                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
-                            
-                            # Transformujeme na WGS84 (EPSG:4326)
-                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
-                            
-                            # Skontrolujeme výsledok
-                            if gdf_wgs84.geometry.iloc[0] is None:
-                                print(f"Transformácia zlyhala pre hex geometriu: {geom_data[:50]}...")
-                                return None
-                            
-                            # Vrátime WKT formát
-                            return gdf_wgs84.geometry.iloc[0].wkt
-                            
-                        except Exception as hex_error:
-                            print(f"Chyba pri hex dekódovaní: {hex_error}")
-                            print(f"Problémová hex geometria: {geom_data[:50]}...")
-                            return None
-                    else:
-                        # Ak to nie je hex ani WKT, skúsime priamo parsovať ako WKT
-                        try:
-                            geom = wkt.loads(geom_data)
-                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
-                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
-                            return gdf_wgs84.geometry.iloc[0].wkt
-                        except Exception as wkt_error:
-                            print(f"Chyba pri WKT parsovaní: {wkt_error}")
-                            return None
-                
-                # Ak je to bytes objekt
-                if isinstance(geom_data, bytes):
-                    try:
-                        geom = wkt.loads(geom_data)
-                        gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
-                        gdf_wgs84 = gdf.to_crs('EPSG:4326')
-                        return gdf_wgs84.geometry.iloc[0].wkt
-                    except Exception as bytes_error:
-                        print(f"Chyba pri bytes parsovaní: {bytes_error}")
-                        return None
-                
-                return None
-            except Exception as e:
-                print(f"Chyba pri konverzii geometrie: {e}")
-                return None
-        
-        # Aplikujeme konverziu na geometry stĺpec
-        st.write("🔄 Transformujem geometrie z EPSG:5514 na WGS84 (EPSG:4326)...")
-        
-        # Debug - zobrazíme prvú geometriu pred transformáciou
-        if not df.empty and 'geometry' in df.columns:
-            first_geom = df['geometry'].iloc[0]
-            st.write(f"🔍 Prvá geometria pred transformáciou: {str(first_geom)[:200]}...")
-            st.write(f"🔍 Typ geometrie: {type(first_geom)}")
-            st.write(f"🔍 Dĺžka geometrie: {len(str(first_geom))}")
-        
-        # Pokúsime sa o konverziu s lepším error handlingom
-        progress_bar = st.progress(0)
-        total_rows = len(df)
-        
-        converted_geometries = []
-        for i, geom_data in enumerate(df['geometry']):
-            try:
-                converted_geom = convert_geometry_to_wgs84(geom_data)
-                converted_geometries.append(converted_geom)
-                
-                # Aktualizujeme progress bar každých 100 riadkov
-                if i % 100 == 0:
-                    progress_bar.progress((i + 1) / total_rows)
-                    
-            except Exception as e:
-                print(f"Chyba pri konverzii riadku {i}: {e}")
-                converted_geometries.append(None)
-        
-        df['geometry'] = converted_geometries
-        progress_bar.progress(1.0)
-        
-        # Debug - zobrazíme prvú geometriu po transformácii
-        if not df.empty and 'geometry' in df.columns:
-            first_geom_after = df['geometry'].iloc[0]
-            st.write(f"🔍 Prvá geometria po transformácii: {str(first_geom_after)[:200]}...")
+        df = df.merge(geometry_df_postgis, on='parcel_id', how='left')
+        df['geometry'] = df['geometry_wgs84']
+        df = df.drop('geometry_wgs84', axis=1, errors='ignore')
         
         # Zobrazíme štatistiky konverzie
         total_geometries = len(df)
         valid_geometries = df['geometry'].notna().sum()
-        st.write(f"📊 Geometrie: {valid_geometries}/{total_geometries} úspešne transformované na WGS84")
-        
-        # Ak sa nepodarilo konvertovať žiadne geometrie, skúsime alternatívny prístup
-        if valid_geometries == 0:
-            st.warning("⚠️ Žiadne geometrie sa nekonvertovali. Skúšam alternatívny prístup...")
-            
-            # Skúsime použiť PostGIS funkcie priamo v SQL
-            try:
-                st.write("🔄 Skúšam konverziu pomocou PostGIS funkcií...")
-                
-                # SQL query s ST_Transform
-                geometry_query_postgis = """
-                SELECT 
-                    parcel_id,
-                    ST_AsText(ST_Transform(geometry, 4326)) as geometry_wgs84
-                FROM yield_level.cf_parcel_season
-                WHERE geometry IS NOT NULL
-                """
-                
-                geometry_df_postgis = pd.read_sql(geometry_query_postgis, engine)
-                
-                if not geometry_df_postgis.empty:
-                    # Spojenie s pôvodnými dátami
-                    df = df.drop('geometry', axis=1, errors='ignore')
-                    df = df.merge(geometry_df_postgis, on='parcel_id', how='left')
-                    df['geometry'] = df['geometry_wgs84']
-                    df = df.drop('geometry_wgs84', axis=1, errors='ignore')
-                    
-                    valid_geometries_postgis = df['geometry'].notna().sum()
-                    st.success(f"✅ PostGIS konverzia úspešná: {valid_geometries_postgis}/{total_geometries} geometrií")
-                else:
-                    st.error("❌ PostGIS konverzia zlyhala - žiadne dáta")
-                    
-            except Exception as postgis_error:
-                st.error(f"❌ PostGIS konverzia zlyhala: {postgis_error}")
+        st.success(f"PostGIS konverzia úspešná: {valid_geometries}/{total_geometries} geometrií")
         
         # Zobrazíme vzorku dát
         if not df.empty:
-            st.write("📋 Vzorka dát:")
+            st.write("Vzorka dát:")
             sample_cols = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id', 'area']
             available_cols = [col for col in sample_cols if col in df.columns]
             st.dataframe(df[available_cols].head())
