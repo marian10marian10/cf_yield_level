@@ -116,36 +116,74 @@ def load_data():
         df = df.merge(geometry_df, on='parcel_id', how='left')
         
         # Konverzia geometry na string pre kompatibilitu
-        # Geometrie sú v WKB formáte, musíme ich konvertovať na WKT
-        def convert_wkb_to_wkt(wkb_data):
+        # Geometrie sú v WKT formáte v EPSG:5514, musíme ich transformovať na WGS84 (EPSG:4326)
+        def convert_geometry_to_wgs84(geom_data):
             try:
-                if pd.isna(wkb_data) or wkb_data is None:
+                if pd.isna(geom_data) or geom_data is None:
                     return None
                 
-                # Ak je už string, skúsime ho parsovať ako WKB
-                if isinstance(wkb_data, str):
+                # Ak je už string, skúsime ho parsovať
+                if isinstance(geom_data, str):
                     # Skontrolujeme, či je to už WKT formát
-                    if wkb_data.startswith('POLYGON') or wkb_data.startswith('MULTIPOLYGON'):
-                        return wkb_data
-                    # Ak nie, pokúsime sa dekódovať z hex
-                    try:
-                        # Odstránime prípadné medzery
-                        clean_hex = wkb_data.replace(' ', '').replace('\n', '')
-                        wkb_bytes = binascii.unhexlify(clean_hex)
-                        geom = wkt.loads(wkb_bytes)
-                        return geom.wkt
-                    except Exception as hex_error:
-                        # Ak hex dekódovanie zlyhá, skúsime priamo parsovať ako WKT
+                    if geom_data.startswith(('POLYGON', 'MULTIPOLYGON', 'POINT', 'LINESTRING')):
                         try:
-                            geom = wkt.loads(wkb_data)
-                            return geom.wkt
-                        except:
+                            # Parsujeme geometriu
+                            geom = wkt.loads(geom_data)
+                            
+                            # Skontrolujeme, či je geometria validná
+                            if not geom.is_valid:
+                                print(f"Nevalidná geometria: {geom_data[:100]}...")
+                                return None
+                            
+                            # Vytvoríme GeoDataFrame s EPSG:5514
+                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
+                            
+                            # Transformujeme na WGS84 (EPSG:4326)
+                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
+                            
+                            # Skontrolujeme výsledok
+                            if gdf_wgs84.geometry.iloc[0] is None:
+                                print(f"Transformácia zlyhala pre geometriu: {geom_data[:100]}...")
+                                return None
+                            
+                            # Vrátime WKT formát
+                            return gdf_wgs84.geometry.iloc[0].wkt
+                        except Exception as transform_error:
+                            print(f"Chyba pri transformácii geometrie: {transform_error}")
+                            print(f"Problémová geometria: {geom_data[:100]}...")
+                            return None
+                    
+                    # Ak nie je WKT, skúsime dekódovať z hex (len ak vyzerá ako hex)
+                    if len(geom_data) > 10 and all(c in '0123456789ABCDEFabcdef' for c in geom_data[:20]):
+                        try:
+                            clean_hex = geom_data.replace(' ', '').replace('\n', '')
+                            wkb_bytes = binascii.unhexlify(clean_hex)
+                            geom = wkt.loads(wkb_bytes)
+                            
+                            # Transformujeme na WGS84
+                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
+                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
+                            return gdf_wgs84.geometry.iloc[0].wkt
+                        except Exception as hex_error:
+                            print(f"Chyba pri hex dekódovaní: {hex_error}")
+                            return None
+                    else:
+                        # Ak to nie je hex, skúsime priamo parsovať ako WKT
+                        try:
+                            geom = wkt.loads(geom_data)
+                            gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
+                            gdf_wgs84 = gdf.to_crs('EPSG:4326')
+                            return gdf_wgs84.geometry.iloc[0].wkt
+                        except Exception as wkt_error:
+                            print(f"Chyba pri WKT parsovaní: {wkt_error}")
                             return None
                 
                 # Ak je to bytes objekt
-                if isinstance(wkb_data, bytes):
-                    geom = wkt.loads(wkb_data)
-                    return geom.wkt
+                if isinstance(geom_data, bytes):
+                    geom = wkt.loads(geom_data)
+                    gdf = gpd.GeoDataFrame([1], geometry=[geom], crs='EPSG:5514')
+                    gdf_wgs84 = gdf.to_crs('EPSG:4326')
+                    return gdf_wgs84.geometry.iloc[0].wkt
                 
                 return None
             except Exception as e:
@@ -153,13 +191,31 @@ def load_data():
                 return None
         
         # Aplikujeme konverziu na geometry stĺpec
-        st.write("🔄 Konvertujem geometrie z WKB na WKT formát...")
-        df['geometry'] = df['geometry'].apply(convert_wkb_to_wkt)
+        st.write("🔄 Transformujem geometrie z EPSG:5514 na WGS84 (EPSG:4326)...")
+        
+        # Debug - zobrazíme prvú geometriu pred transformáciou
+        if not df.empty and 'geometry' in df.columns:
+            first_geom = df['geometry'].iloc[0]
+            st.write(f"🔍 Prvá geometria pred transformáciou: {str(first_geom)[:200]}...")
+        
+        df['geometry'] = df['geometry'].apply(convert_geometry_to_wgs84)
+        
+        # Debug - zobrazíme prvú geometriu po transformácii
+        if not df.empty and 'geometry' in df.columns:
+            first_geom_after = df['geometry'].iloc[0]
+            st.write(f"🔍 Prvá geometria po transformácii: {str(first_geom_after)[:200]}...")
         
         # Zobrazíme štatistiky konverzie
         total_geometries = len(df)
         valid_geometries = df['geometry'].notna().sum()
-        st.write(f"📊 Geometrie: {valid_geometries}/{total_geometries} úspešne konvertované")
+        st.write(f"📊 Geometrie: {valid_geometries}/{total_geometries} úspešne transformované na WGS84")
+        
+        # Zobrazíme vzorku dát
+        if not df.empty:
+            st.write("📋 Vzorka dát:")
+            sample_cols = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id', 'area']
+            available_cols = [col for col in sample_cols if col in df.columns]
+            st.dataframe(df[available_cols].head())
         
         # Pridanie agev_parcel_id pre kompatibilitu s existujúcim kódom
         df['agev_parcel_id'] = df['parcel_id']

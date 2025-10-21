@@ -9,6 +9,7 @@ from modules.data_loader import load_data, calculate_yield_percentage
 from modules.enterprise_stats import show_enterprise_statistics
 from modules.parcel_stats import show_parcel_statistics
 from modules.crop_stats import show_crop_statistics
+from modules.advanced_analytics import show_advanced_analytics
 
 # Konfigurácia stránky
 st.set_page_config(
@@ -91,8 +92,8 @@ def main():
     # Menu s kartami
     st.header("📋 Menu aplikácie")
     
-    # Vytvorenie troch stĺpcov pre menu karty
-    col1, col2, col3 = st.columns(3)
+    # Vytvorenie štyroch stĺpcov pre menu karty
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if st.button("🏢 Štatistiky na úrovni podniku", key="enterprise_tab", use_container_width=True):
@@ -105,6 +106,10 @@ def main():
     with col3:
         if st.button("🏞️ Štatistiky na úrovni parcely", key="parcel_tab", use_container_width=True):
             st.session_state.active_tab = "parcel"
+    
+    with col4:
+        if st.button("📈 Pokročilé analýzy", key="advanced_tab", use_container_width=True):
+            st.session_state.active_tab = "advanced"
     
     # Inicializácia aktívnej karty
     if 'active_tab' not in st.session_state:
@@ -156,6 +161,12 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         
         show_parcel_statistics(df, selected_parcel)
+        
+    elif st.session_state.active_tab == "advanced":
+        show_advanced_analytics(df)
+        
+    else:
+        st.info("Vyberte kartu z menu vyššie.")
 
 if __name__ == "__main__":
     main()
