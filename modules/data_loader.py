@@ -34,9 +34,9 @@ def load_data():
         columns_df = pd.read_sql(check_columns_query, engine)
         available_columns = columns_df['column_name'].tolist()
         
-        # Debug informácie
-        st.write("Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
-        st.dataframe(columns_df)
+        # Debug informácie - skryté
+        # st.write("Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
+        # st.dataframe(columns_df)
         
         # Dynamické vytvorenie SELECT query na základe dostupných stĺpcov
         select_columns = []
@@ -52,12 +52,12 @@ def load_data():
         if 'area' in available_columns:
             select_columns.append('area')
         
-        # Vytvorenie SQL query s filtrom na sezónu '24_25'
+        # Vytvorenie SQL query - všetky sezóny pre výnosy
         columns_str = ', '.join(select_columns)
         query = f"""
         SELECT {columns_str}
         FROM yield_level.skeagis_yields
-        WHERE yield_ha > 0 AND season = '24_25'
+        WHERE yield_ha > 0
         ORDER BY season, parcel_id
         """
         
@@ -96,18 +96,19 @@ def load_data():
         """
         
         geometry_columns_df = pd.read_sql(geometry_columns_query, engine)
-        st.write("Dostupné stĺpce v tabuľke yield_level.cf_parcel_season:")
-        st.dataframe(geometry_columns_df)
+        # Debug informácie - skryté
+        # st.write("Dostupné stĺpce v tabuľke yield_level.cf_parcel_season:")
+        # st.dataframe(geometry_columns_df)
         
         # Načítanie geometrie z yield_level.cf_parcel_season s PostGIS transformáciou
-        st.write("Načítavam geometrie pomocou PostGIS funkcií...")
+        # st.write("Načítavam geometrie pomocou PostGIS funkcií...")
         
         geometry_query_postgis = """
         SELECT 
             parcel_id,
             ST_AsText(ST_Transform(geometry, 4326)) as geometry_wgs84
         FROM yield_level.cf_parcel_season
-        WHERE geometry IS NOT NULL
+        WHERE geometry IS NOT NULL AND season_id = '24_25'
         """
         
         geometry_df_postgis = pd.read_sql(geometry_query_postgis, engine)
@@ -117,17 +118,17 @@ def load_data():
         df['geometry'] = df['geometry_wgs84']
         df = df.drop('geometry_wgs84', axis=1, errors='ignore')
         
-        # Zobrazíme štatistiky konverzie
-        total_geometries = len(df)
-        valid_geometries = df['geometry'].notna().sum()
-        st.success(f"PostGIS konverzia úspešná: {valid_geometries}/{total_geometries} geometrií")
+        # Zobrazíme štatistiky konverzie - skryté
+        # total_geometries = len(df)
+        # valid_geometries = df['geometry'].notna().sum()
+        # st.success(f"PostGIS konverzia úspešná: {valid_geometries}/{total_geometries} geometrií")
         
-        # Zobrazíme vzorku dát
-        if not df.empty:
-            st.write("Vzorka dát:")
-            sample_cols = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id', 'area']
-            available_cols = [col for col in sample_cols if col in df.columns]
-            st.dataframe(df[available_cols].head())
+        # Zobrazíme vzorku dát - skryté
+        # if not df.empty:
+        #     st.write("Vzorka dát:")
+        #     sample_cols = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id', 'area']
+        #     available_cols = [col for col in sample_cols if col in df.columns]
+        #     st.dataframe(df[available_cols].head())
         
         # Pridanie agev_parcel_id pre kompatibilitu s existujúcim kódom
         df['agev_parcel_id'] = df['parcel_id']
