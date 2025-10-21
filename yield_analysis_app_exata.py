@@ -69,11 +69,11 @@ def main():
     st.markdown('<h1 class="main-header">🌾 Analýza výnosov DPB</h1>', unsafe_allow_html=True)
     
     # Načítanie dát
-    with st.spinner("Načítavam dáta z CSV súboru..."):
+    with st.spinner("Načítavam dáta z PostgreSQL databázy..."):
         df = load_data()
     
     if df is None:
-        st.error("Nepodarilo sa načítať dáta. Skontrolujte, či existuje súbor 'yield_data.csv'.")
+        st.error("Nepodarilo sa načítať dáta z databázy. Skontrolujte pripojenie k databáze.")
         return
     
     # Výpočet percentuálnych výnosov
