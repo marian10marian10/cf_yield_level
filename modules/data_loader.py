@@ -118,6 +118,20 @@ def load_data():
         df['geometry'] = df['geometry_wgs84']
         df = df.drop('geometry_wgs84', axis=1, errors='ignore')
         
+        # Načítanie lookup tabuľky pre localname
+        lookup_query = """
+        SELECT parcel_id, localname, company
+        FROM lookups.lookup_sklpis_parcels
+        """
+        
+        lookup_df = pd.read_sql(lookup_query, engine)
+        
+        # Spojenie s lookup tabuľkou
+        df = df.merge(lookup_df, on='parcel_id', how='left')
+        
+        # Nahradenie parcel_id za localname kde je dostupné
+        df['parcel_display_name'] = df['localname'].fillna(df['parcel_id'])
+        
         # Zobrazíme štatistiky konverzie - skryté
         # total_geometries = len(df)
         # valid_geometries = df['geometry'].notna().sum()
@@ -133,8 +147,8 @@ def load_data():
         # Pridanie agev_parcel_id pre kompatibilitu s existujúcim kódom
         df['agev_parcel_id'] = df['parcel_id']
         
-        # Vytvorenie name stĺpca z parcel_id
-        df['name'] = df['parcel_id'].astype(str)
+        # Vytvorenie name stĺpca z parcel_display_name (localname alebo parcel_id)
+        df['name'] = df['parcel_display_name'].astype(str)
         
         engine.dispose()
         
