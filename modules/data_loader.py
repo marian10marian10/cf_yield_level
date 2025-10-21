@@ -81,7 +81,7 @@ def load_data():
             df['ppa_crop_id'] = 'Neznáma plodina'  # Default hodnota
         
         # Pre kompatibilitu s existujúcim kódom vytvoríme aj stĺpec crop
-        df['crop'] = df['ppa_crop_id']
+        df['crop'] = df['crop_display_name']
         
         # Filtrovanie len platných výnosov a rokov
         df = df[(df['yield_ha'] > 0) & (df['year'].notna())]
@@ -131,6 +131,20 @@ def load_data():
         
         # Nahradenie parcel_id za localname kde je dostupné
         df['parcel_display_name'] = df['localname'].fillna(df['parcel_id'])
+        
+        # Načítanie lookup tabuľky pre crop názvy
+        crop_lookup_query = """
+        SELECT ppa_crop_id, skeagis_crop_name
+        FROM lookups.lookup_crops
+        """
+        
+        crop_lookup_df = pd.read_sql(crop_lookup_query, engine)
+        
+        # Spojenie s crop lookup tabuľkou
+        df = df.merge(crop_lookup_df, on='ppa_crop_id', how='left')
+        
+        # Nahradenie ppa_crop_id za skeagis_crop_name kde je dostupné
+        df['crop_display_name'] = df['skeagis_crop_name'].fillna(df['ppa_crop_id'])
         
         # Zobrazíme štatistiky konverzie - skryté
         # total_geometries = len(df)
