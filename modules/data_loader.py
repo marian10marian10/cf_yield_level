@@ -80,9 +80,6 @@ def load_data():
         if 'ppa_crop_id' not in df.columns:
             df['ppa_crop_id'] = 'Neznáma plodina'  # Default hodnota
         
-        # Pre kompatibilitu s existujúcim kódom vytvoríme aj stĺpec crop
-        df['crop'] = df['crop_display_name']
-        
         # Filtrovanie len platných výnosov a rokov
         df = df[(df['yield_ha'] > 0) & (df['year'].notna())]
         
@@ -145,6 +142,9 @@ def load_data():
         
         # Nahradenie ppa_crop_id za skeagis_crop_name kde je dostupné
         df['crop_display_name'] = df['skeagis_crop_name'].fillna(df['ppa_crop_id'])
+        
+        # Pre kompatibilitu s existujúcim kódom vytvoríme aj stĺpec crop
+        df['crop'] = df['crop_display_name']
         
         # Zobrazíme štatistiky konverzie - skryté
         # total_geometries = len(df)

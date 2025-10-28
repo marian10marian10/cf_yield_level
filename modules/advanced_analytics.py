@@ -31,7 +31,7 @@ def create_basic_stats_cards(df):
     # Výpočet základných štatistík
     total_records = len(df)
     unique_parcels = df['parcel_id'].nunique()
-    unique_crops = df['ppa_crop_id'].nunique()
+    unique_crops = df['crop'].nunique()
     unique_seasons = df['season'].nunique()
     avg_yield = df['yield_ha'].mean()
     max_yield = df['yield_ha'].max()
@@ -112,7 +112,7 @@ def create_seasonal_yield_trends(df, selected_crop=None):
     
     # Filtrovanie podľa vybranej plodiny
     if selected_crop and selected_crop != "Všetky plodiny":
-        df_filtered = df[df['ppa_crop_id'] == selected_crop]
+        df_filtered = df[df['crop'] == selected_crop]
         if df_filtered.empty:
             return create_empty_figure(f"Žiadne dáta pre plodinu: {selected_crop}", "orange")
     else:
@@ -169,7 +169,7 @@ def create_yield_heatmap(df, selected_crop=None):
     
     # Filtrovanie podľa vybranej plodiny
     if selected_crop and selected_crop != "Všetky plodiny":
-        df_filtered = df[df['ppa_crop_id'] == selected_crop]
+        df_filtered = df[df['crop'] == selected_crop]
         if df_filtered.empty:
             return create_empty_figure(f"Žiadne dáta pre plodinu: {selected_crop}", "orange")
     else:
@@ -244,7 +244,7 @@ def create_yield_boxplot(df, selected_crop=None):
     
     # Filtrovanie podľa vybranej plodiny
     if selected_crop and selected_crop != "Všetky plodiny":
-        df_filtered = df[df['ppa_crop_id'] == selected_crop]
+        df_filtered = df[df['crop'] == selected_crop]
         if df_filtered.empty:
             return create_empty_figure(f"Žiadne dáta pre plodinu: {selected_crop}", "orange")
     else:
@@ -302,7 +302,7 @@ def create_yield_scatter_plot(df, selected_crop=None):
     
     # Filtrovanie podľa vybranej plodiny
     if selected_crop and selected_crop != "Všetky plodiny":
-        df_filtered = df[df['ppa_crop_id'] == selected_crop]
+        df_filtered = df[df['crop'] == selected_crop]
         if df_filtered.empty:
             return create_empty_figure(f"Žiadne dáta pre plodinu: {selected_crop}", "orange")
     else:
@@ -375,7 +375,7 @@ def show_advanced_analytics(df):
     
     # Filter pre plodiny
     st.subheader("🔍 Filter")
-    available_crops = sorted(df['ppa_crop_id'].unique())
+    available_crops = sorted(df['crop'].unique())
     selected_crop = st.selectbox(
         "Vyberte plodinu:",
         ["Všetky plodiny"] + available_crops,
@@ -425,7 +425,7 @@ def show_advanced_analytics(df):
     st.subheader("📅 Detailné štatistiky podľa sezón")
     
     if selected_crop != "Všetky plodiny":
-        df_filtered = df[df['ppa_crop_id'] == selected_crop]
+        df_filtered = df[df['crop'] == selected_crop]
     else:
         df_filtered = df
     

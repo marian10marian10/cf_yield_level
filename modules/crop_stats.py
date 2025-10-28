@@ -202,18 +202,37 @@ def create_yield_heatmap(df, crop_name):
     min_yield = crop_data['yield_ha'].quantile(0.01)  # 1. percentil namiesto minima
     max_yield = crop_data['yield_ha'].quantile(0.99)  # 99. percentil namiesto maxima
     
-    # Vytvorenie kategórií s rovnakou šírkou
-    yield_bins = np.linspace(min_yield, max_yield, 11)
-    yield_labels = [f"{yield_bins[i]:.1f}-{yield_bins[i+1]:.1f}" for i in range(len(yield_bins)-1)]
+    # Kontrola, či min a max sú rovnaké alebo veľmi blízko
+    if min_yield == max_yield or (max_yield - min_yield) < 0.001:
+        # Ak nie je variabilita, vytvorime jednoduchšie kategórie
+        mean_yield = crop_data['yield_ha'].mean()
+        yield_bins = np.array([mean_yield - 0.01, mean_yield, mean_yield + 0.01])
+        yield_labels = ["Nízky", "Stredný", "Vysoký"]
+    else:
+        # Vytvorenie kategórií s rovnakou šírkou
+        yield_bins = np.linspace(min_yield, max_yield, 11)
+        yield_labels = []
+        for i in range(len(yield_bins)-1):
+            label = f"{yield_bins[i]:.1f}-{yield_bins[i+1]:.1f}"
+            # Ak label už existuje (duplicita), pridáme číslo
+            if label in yield_labels:
+                count = sum(1 for lab in yield_labels if lab.startswith(label.split('-')[0]))
+                label = f"{label} ({count})"
+            yield_labels.append(label)
     
     # Pridanie kategórií do dát
-    crop_data['yield_category'] = pd.cut(crop_data['yield_ha'], bins=yield_bins, labels=yield_labels, include_lowest=True)
+    crop_data['yield_category'] = pd.cut(crop_data['yield_ha'], bins=yield_bins, labels=yield_labels, include_lowest=True, ordered=False)
     
     # Agregácia dát podľa roku a výnosovej kategórie
     heatmap_data = crop_data.groupby(['year', 'yield_category']).size().unstack(fill_value=0)
     
     # Preusporiadanie stĺpcov podľa výnosu (od najnižšieho po najvyšší)
-    heatmap_data = heatmap_data.reindex(columns=yield_labels)
+    # Zajistíme, že všetky labeli sú prítomné v heatmap_data
+    for label in yield_labels:
+        if label not in heatmap_data.columns:
+            heatmap_data[label] = 0
+    
+    heatmap_data = heatmap_data.reindex(columns=yield_labels, fill_value=0)
     
     # Vytvorenie heatmapy
     fig = go.Figure(data=go.Heatmap(

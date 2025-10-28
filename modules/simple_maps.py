@@ -219,3 +219,4 @@ def show_maps(df):
     with col3:
         percentage = (geom_count / len(df) * 100) if len(df) > 0 else 0
         st.metric("Pokrytie geometriami", f"{percentage:.1f}%")
+
