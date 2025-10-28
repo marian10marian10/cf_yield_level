@@ -242,11 +242,62 @@ def show_planning(df):
     display_df = display_df.sort_values('Predikovaný výnos (t/ha)', ascending=False)
     
     # Zobrazenie tabuľky
+    st.markdown("""
+    <style>
+    .stDataFrame {
+        text-align: left !important;
+    }
+    .stDataFrame th {
+        text-align: left !important;
+    }
+    .stDataFrame td {
+        text-align: left !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Explicitly convert numeric columns to strings with left-aligned formatting
+    display_df['Predikovaný výnos (t/ha)'] = display_df['Predikovaný výnos (t/ha)'].apply(lambda x: f'{x:.2f}')
+    display_df['Počet historických dát'] = display_df['Počet historických dát'].astype(str)
+    
     st.dataframe(
         display_df,
-        use_container_width=True,
         height=500,
-        hide_index=True
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Parcela ID": st.column_config.TextColumn(
+                label="Parcela ID",
+                help="Identifikátor parcely",
+                width="small"
+            ),
+            "Názov parcely": st.column_config.TextColumn(
+                label="Názov parcely",
+                help="Názov parcely",
+                width="medium"
+            ),
+            "Plodina": st.column_config.TextColumn(
+                label="Plodina",
+                help="Typ plodiny",
+                width="small"
+            ),
+            "Spoločnosť": st.column_config.TextColumn(
+                label="Spoločnosť",
+                help="Spoločnosť",
+                width="small"
+            ),
+            "Predikovaný výnos (t/ha)": st.column_config.TextColumn(
+                label="Predikovaný výnos (t/ha)",
+                help="Predikovaný výnos v tonách na hektár",
+                width="small"
+            ),
+            "Počet historických dát": st.column_config.TextColumn(
+                label="Počet historických dát",
+                help="Počet historických záznamov pre predikciu",
+                width="small"
+            )
+        },
+        column_order=["Parcela ID", "Názov parcely", "Plodina", "Spoločnosť", "Predikovaný výnos (t/ha)", "Počet historických dát"]
     )
     
     # Poznámka
