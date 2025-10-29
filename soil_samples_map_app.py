@@ -265,9 +265,9 @@ def create_map(gdf_parcels_with_stats, gdf_points, selected_parameter):
         )
         fig.add_trace(scatter)
         
-        # Update layout
+        # Update layout with Carto Positron light map
         fig.update_layout(
-            mapbox_style="open-street-map",
+            mapbox_style="carto-positron",
             mapbox=dict(
                 center=dict(
                     lat=gdf_parcels_with_stats.geometry.centroid.y.mean(),
@@ -341,9 +341,9 @@ def create_map(gdf_parcels_with_stats, gdf_points, selected_parameter):
         )
         fig.add_trace(scatter)
         
-        # Update layout
+        # Update layout with Carto Positron light map
         fig.update_layout(
-            mapbox_style="open-street-map",
+            mapbox_style="carto-positron",
             mapbox=dict(
                 center=dict(
                     lat=gdf_parcels_with_stats.geometry.centroid.y.mean(),
@@ -356,6 +356,390 @@ def create_map(gdf_parcels_with_stats, gdf_points, selected_parameter):
         )
     
     return fig
+
+def create_additional_visualizations(gdf_parcels_with_stats, gdf_points):
+    """Create additional visualizations for soil sample data."""
+    import plotly.graph_objs as go
+    import plotly.express as px
+    import numpy as np
+    import pandas as pd
+    
+    # 1. Box Plot: Distribution of Soil Nutrients
+    fig_boxplot = go.Figure()
+    nutrients = ['p', 'k', 'ph']
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, Orange, Green
+    
+    for i, nutrient in enumerate(nutrients):
+        fig_boxplot.add_trace(go.Box(
+            y=gdf_points[nutrient],
+            name=nutrient.upper(),
+            marker_color=colors[i]
+        ))
+    
+    fig_boxplot.update_layout(
+        title='Distribúcia Živín v Pôdnych Vzorkách',
+        yaxis_title='Hodnota',
+        height=300,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    # 2. Scatter Matrix: Correlation between Nutrients
+    scatter_matrix_data = gdf_points[['p', 'k', 'ph']].copy()
+    scatter_matrix_data.columns = ['Fosfor (P)', 'Draslík (K)', 'pH']
+    
+    fig_scatter_matrix = px.scatter_matrix(
+        scatter_matrix_data, 
+        dimensions=['Fosfor (P)', 'Draslík (K)', 'pH'],
+        title='Korelácie medzi Živinami',
+        height=400,
+        color_discrete_sequence=['#1f77b4']
+    )
+    
+    # 3. Histogram: Frequency of Nutrient Levels
+    fig_histogram = go.Figure()
+    
+    for i, nutrient in enumerate(nutrients):
+        fig_histogram.add_trace(go.Histogram(
+            x=gdf_points[nutrient],
+            name=nutrient.upper(),
+            opacity=0.7,
+            marker_color=colors[i]
+        ))
+    
+    fig_histogram.update_layout(
+        title='Frekvencia Úrovní Živín',
+        xaxis_title='Hodnota',
+        yaxis_title='Početnosť',
+        barmode='overlay',
+        height=300,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    # 4. Pie Chart: Parcel Distribution by Nutrient Categories
+    def categorize_nutrient(nutrient, values):
+        if nutrient == 'p':
+            categories = [
+                (0, 50, 'Nízky'),
+                (51, 80, 'Vyhovujúci'),
+                (81, 115, 'Dobrý'),
+                (116, 185, 'Vysoký'),
+                (186, float('inf'), 'Veľmi vysoký')
+            ]
+        elif nutrient == 'k':
+            categories = [
+                (0, 50, 'Nízky'),
+                (51, 100, 'Stredný'),
+                (101, 200, 'Dobrý'),
+                (201, 300, 'Vysoký'),
+                (301, float('inf'), 'Veľmi vysoký')
+            ]
+        else:  # pH
+            categories = [
+                (0, 5.5, 'Silne kyslé'),
+                (5.5, 6.5, 'Kyslé'),
+                (6.5, 7.2, 'Neutrálne'),
+                (7.2, 8.5, 'Alkalické'),
+                (8.5, float('inf'), 'Silne alkalické')
+            ]
+        
+        for low, high, label in categories:
+            if low <= values < high:
+                return label
+        return 'Neurčené'
+    
+    nutrient_pie_data = {}
+    for nutrient in nutrients:
+        nutrient_categories = gdf_points[nutrient].apply(lambda x: categorize_nutrient(nutrient, x))
+        nutrient_counts = nutrient_categories.value_counts()
+        nutrient_pie_data[nutrient] = nutrient_counts
+    
+    # Create pie charts
+    fig_pie = go.Figure()
+    for i, (nutrient, counts) in enumerate(nutrient_pie_data.items()):
+        fig_pie.add_trace(go.Pie(
+            labels=counts.index, 
+            values=counts.values,
+            name=nutrient.upper(),
+            title=f'Kategórie {nutrient.upper()}',
+            domain={'row': i // 2, 'column': i % 2}
+        ))
+    
+    fig_pie.update_layout(
+        title='Distribúcia Kategórií Živín',
+        grid={'rows': 2, 'columns': 2},
+        height=600,
+        margin=dict(l=50, r=50, t=100, b=50)
+    )
+    
+    # 5. Dummy figure to match the 5-value unpacking
+    fig_dummy = go.Figure()
+    fig_dummy.update_layout(
+        title='Dummy Figure',
+        height=300,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    return fig_boxplot, fig_scatter_matrix, fig_histogram, fig_pie, fig_dummy
+
+def create_company_visualizations(gdf_parcels_with_stats, gdf_points):
+    """Create visualizations based on company data."""
+    import plotly.graph_objs as go
+    import plotly.express as px
+    import pandas as pd
+    import geopandas as gpd
+    
+    # Ensure parcels DataFrame is a GeoDataFrame with geometry
+    if not isinstance(gdf_parcels_with_stats, gpd.GeoDataFrame):
+        gdf_parcels_with_stats = gpd.GeoDataFrame(
+            gdf_parcels_with_stats, 
+            geometry=gdf_parcels_with_stats.geometry, 
+            crs=gdf_points.crs
+        )
+    
+    # Create a GeoDataFrame for parcels with only the required columns
+    parcels_subset = gdf_parcels_with_stats[['parcel_id', 'company', 'geometry']].copy()
+    
+    # Spatial join to get company information
+    try:
+        # Use spatial join to match points to parcels
+        gdf_points_with_company = gpd.sjoin(
+            gdf_points, 
+            parcels_subset, 
+            how='left', 
+            predicate='within'
+        )
+    except Exception as e:
+        # Fallback to attribute join if spatial join fails
+        st.warning(f"Spatial join failed. Falling back to attribute join: {e}")
+        # Merge based on parcel_id if available
+        if 'parcel_id' in gdf_points.columns and 'parcel_id' in gdf_parcels_with_stats.columns:
+            gdf_points_with_company = gdf_points.merge(
+                gdf_parcels_with_stats[['parcel_id', 'company']], 
+                on='parcel_id', 
+                how='left'
+            )
+            # Convert back to GeoDataFrame
+            gdf_points_with_company = gpd.GeoDataFrame(
+                gdf_points_with_company, 
+                geometry=gdf_points.geometry, 
+                crs=gdf_points.crs
+            )
+        else:
+            st.error("Cannot join points with parcels. No common identifier found.")
+            return None, None, None
+    
+    # Remove rows with no company information
+    gdf_points_with_company = gdf_points_with_company.dropna(subset=['company'])
+    
+    # Nutrients (excluding pH)
+    nutrients = ['p', 'k']
+    colors = ['#1f77b4', '#ff7f0e']  # Blue, Orange
+    
+    # 1. Box Plot: Nutrient Levels by Company
+    fig_company_boxplot = go.Figure()
+    
+    for i, nutrient in enumerate(nutrients):
+        # Group data by company
+        company_groups = [
+            gdf_points_with_company[gdf_points_with_company['company'] == company][nutrient] 
+            for company in gdf_points_with_company['company'].unique()
+        ]
+        company_labels = list(gdf_points_with_company['company'].unique())
+        
+        # Create box plot
+        fig_company_boxplot.add_trace(go.Box(
+            y=company_groups,
+            name=nutrient.upper(),
+            boxpoints='outliers',
+            marker_color=colors[i],
+            x=company_labels
+        ))
+    
+    fig_company_boxplot.update_layout(
+        title='Distribúcia Živín (P, K) podľa Spoločností',
+        xaxis_title='Spoločnosť',
+        yaxis_title='Hodnota',
+        height=400,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    # 2. Bar Chart: Average Nutrient Levels by Company
+    company_avg_nutrients = gdf_points_with_company.groupby('company')[nutrients].mean().reset_index()
+    
+    fig_company_avg = go.Figure()
+    for i, nutrient in enumerate(nutrients):
+        fig_company_avg.add_trace(go.Bar(
+            x=company_avg_nutrients['company'],
+            y=company_avg_nutrients[nutrient],
+            name=nutrient.upper(),
+            marker_color=colors[i]
+        ))
+    
+    fig_company_avg.update_layout(
+        title='Priemerné Úrovne Živín (P, K) podľa Spoločností',
+        xaxis_title='Spoločnosť',
+        yaxis_title='Priemerná Hodnota',
+        barmode='group',
+        height=400,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    # 3. Pie Chart: Nutrient Category Distribution by Company
+    def categorize_nutrient(nutrient, values):
+        if nutrient == 'p':
+            categories = [
+                (0, 50, 'Nízky'),
+                (51, 80, 'Vyhovujúci'),
+                (81, 115, 'Dobrý'),
+                (116, 185, 'Vysoký'),
+                (186, float('inf'), 'Veľmi vysoký')
+            ]
+        elif nutrient == 'k':
+            categories = [
+                (0, 50, 'Nízky'),
+                (51, 100, 'Stredný'),
+                (101, 200, 'Dobrý'),
+                (201, 300, 'Vysoký'),
+                (301, float('inf'), 'Veľmi vysoký')
+            ]
+        
+        for low, high, label in categories:
+            if low <= values < high:
+                return label
+        return 'Neurčené'
+    
+    # Pie Charts for P and K
+    fig_company_pie = go.Figure()
+    companies = gdf_points_with_company['company'].unique()
+    
+    for i, nutrient in enumerate(nutrients):
+        # Prepare data for pie chart
+        nutrient_categories = gdf_points_with_company.groupby('company').apply(
+            lambda x: x[nutrient].apply(lambda val: categorize_nutrient(nutrient, val)).value_counts()
+        )
+        
+        # Create subplot for each company
+        for j, company in enumerate(companies):
+            fig_company_pie.add_trace(go.Pie(
+                labels=nutrient_categories[company].index, 
+                values=nutrient_categories[company].values,
+                name=f'{company} - {nutrient.upper()}',
+                title=f'{company} - Kategórie {nutrient.upper()}',
+                domain={'row': (i * len(companies) + j) // 3, 'column': (i * len(companies) + j) % 3}
+            ))
+    
+    fig_company_pie.update_layout(
+        title='Distribúcia Kategórií Živín (P, K) podľa Spoločností',
+        grid={'rows': len(nutrients), 'columns': 3},
+        height=900,
+        margin=dict(l=50, r=50, t=100, b=50)
+    )
+    
+    # 4. pH-specific Visualizations
+    # Box Plot for pH
+    fig_ph_boxplot = go.Figure()
+    
+    company_groups_ph = [
+        gdf_points_with_company[gdf_points_with_company['company'] == company]['ph'] 
+        for company in gdf_points_with_company['company'].unique()
+    ]
+    company_labels_ph = list(gdf_points_with_company['company'].unique())
+    
+    fig_ph_boxplot.add_trace(go.Box(
+        y=company_groups_ph,
+        name='pH',
+        boxpoints='outliers',
+        marker_color='#2ca02c',  # Green
+        x=company_labels_ph
+    ))
+    
+    fig_ph_boxplot.update_layout(
+        title='Distribúcia pH podľa Spoločností',
+        xaxis_title='Spoločnosť',
+        yaxis_title='pH Hodnota',
+        height=400,
+        margin=dict(l=50, r=50, t=50, b=50)
+    )
+    
+    # Pie Chart for pH Categories
+    def categorize_ph(value):
+        """
+        Categorize pH values based on soil reaction:
+        - do 4,5 extrémne kyslá
+        - 4,6 - 5,0 silne kyslá
+        - 5,1 - 5,5 kyslá
+        - 5,6 - 6,5 slabo kyslá
+        - 6,6 - 7,2 neutrálna
+        - 7,3 - 7,7 alkalická
+        - nad 7,7 silne alkalická
+        """
+        if value <= 4.5:
+            return 'Extrémne kyslá'
+        elif 4.6 <= value <= 5.0:
+            return 'Silne kyslá'
+        elif 5.1 <= value <= 5.5:
+            return 'Kyslá'
+        elif 5.6 <= value <= 6.5:
+            return 'Slabo kyslá'
+        elif 6.6 <= value <= 7.2:
+            return 'Neutrálna'
+        elif 7.3 <= value <= 7.7:
+            return 'Alkalická'
+        else:
+            return 'Silne alkalická'
+    
+    # Pie Chart for pH Categories by Company
+    fig_ph_pie = go.Figure()
+    
+    # Prepare data for pH pie chart
+    ph_categories = gdf_points_with_company.groupby('company').apply(
+        lambda x: x['ph'].apply(categorize_ph).value_counts()
+    )
+    
+    # Create subplot for each company
+    for j, company in enumerate(companies):
+        fig_ph_pie.add_trace(go.Pie(
+            labels=ph_categories[company].index, 
+            values=ph_categories[company].values,
+            name=f'{company} - pH',
+            title=f'{company} - Kategórie pH',
+            domain={'row': j // 3, 'column': j % 3}
+        ))
+    
+    fig_ph_pie.update_layout(
+        title='Distribúcia Kategórií pH podľa Spoločností',
+        grid={'rows': (len(companies) + 2) // 3, 'columns': 3},
+        height=900,
+        margin=dict(l=50, r=50, t=100, b=50)
+    )
+    
+    return fig_company_boxplot, fig_company_avg, fig_company_pie, fig_ph_boxplot, fig_ph_pie
+
+def categorize_ph(value):
+    """
+    Categorize pH values based on soil reaction:
+    - do 4,5 extrémne kyslá
+    - 4,6 - 5,0 silne kyslá
+    - 5,1 - 5,5 kyslá
+    - 5,6 - 6,5 slabo kyslá
+    - 6,6 - 7,2 neutrálna
+    - 7,3 - 7,7 alkalická
+    - nad 7,7 silne alkalická
+    """
+    if value <= 4.5:
+        return 'Extrémne kyslá'
+    elif 4.6 <= value <= 5.0:
+        return 'Silne kyslá'
+    elif 5.1 <= value <= 5.5:
+        return 'Kyslá'
+    elif 5.6 <= value <= 6.5:
+        return 'Slabo kyslá'
+    elif 6.6 <= value <= 7.2:
+        return 'Neutrálna'
+    elif 7.3 <= value <= 7.7:
+        return 'Alkalická'
+    else:
+        return 'Silne alkalická'
 
 def soil_samples_map():
     """Streamlit page for soil samples map."""
@@ -380,7 +764,71 @@ def soil_samples_map():
     
     # Create and display map
     fig = create_map(gdf_parcels_with_stats, gdf_points, selected_parameter)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key='main_map')
+    
+    # Create additional visualizations
+    st.markdown("## Doplňujúce Analýzy Pôdnych Vzoriek")
+    
+    # Create visualization columns
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Box Plot
+        st.markdown("### Distribúcia Živín")
+        fig_boxplot, _, _, _, _ = create_additional_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_boxplot, use_container_width=True, key='boxplot')
+        
+        # Histogram
+        st.markdown("### Frekvencia Úrovní Živín")
+        _, _, fig_histogram, _, _ = create_additional_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_histogram, use_container_width=True, key='histogram')
+    
+    with col2:
+        # Scatter Matrix
+        st.markdown("### Korelácie medzi Živinami")
+        _, fig_scatter_matrix, _, _, _ = create_additional_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_scatter_matrix, use_container_width=True, key='scatter_matrix')
+        
+        # Pie Charts
+        st.markdown("### Kategórie Živín")
+        _, _, _, fig_pie, _ = create_additional_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_pie, use_container_width=True, key='pie_chart')
+    
+    # Company-based Visualizations
+    st.markdown("## Analýzy Podľa Spoločností")
+    
+    # Create visualization columns for company data
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        # Company Box Plot
+        st.markdown("### Distribúcia Živín (P, K)")
+        fig_company_boxplot, _, _, _, _ = create_company_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_company_boxplot, use_container_width=True, key='company_boxplot')
+    
+    with col4:
+        # Company Average Nutrients
+        st.markdown("### Priemerné Úrovne Živín (P, K)")
+        _, fig_company_avg, _, _, _ = create_company_visualizations(gdf_parcels_with_stats, gdf_points)
+        st.plotly_chart(fig_company_avg, use_container_width=True, key='company_avg')
+    
+    # Company Pie Charts for P and K
+    st.markdown("### Kategórie Živín (P, K) podľa Spoločností")
+    _, _, fig_company_pie, _, _ = create_company_visualizations(gdf_parcels_with_stats, gdf_points)
+    st.plotly_chart(fig_company_pie, use_container_width=True, key='company_pie')
+    
+    # pH-specific Visualizations
+    st.markdown("## Analýzy pH")
+    
+    # pH Box Plot
+    st.markdown("### Distribúcia pH podľa Spoločností")
+    _, _, _, _, fig_ph_boxplot = create_company_visualizations(gdf_parcels_with_stats, gdf_points)
+    st.plotly_chart(fig_ph_boxplot, use_container_width=True, key='ph_boxplot')
+    
+    # pH Pie Charts
+    st.markdown("### Kategórie pH podľa Spoločností")
+    _, _, _, _, fig_ph_pie = create_company_visualizations(gdf_parcels_with_stats, gdf_points)
+    st.plotly_chart(fig_ph_pie, use_container_width=True, key='ph_pie')
 
 def about_page():
     """About page for the application."""
