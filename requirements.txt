@@ -2,8 +2,8 @@ streamlit
 pandas
 numpy
 plotly
-scipy
-openpyxl
-shapely
 geopandas
-folium
+psycopg2-binary
+sqlalchemy
+pyproj
+shapely

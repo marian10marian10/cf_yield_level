@@ -9,6 +9,7 @@ import numpy as np
 import psycopg2
 import plotly.express as px
 from sqlalchemy import create_engine
+import io
 
 # Database connection parameters
 DB_USER_DESTINATION = 'db_admin'
@@ -28,7 +29,8 @@ def get_planning_data(df):
         
         # Komplexnejší SQL dopyt pre načítanie dát vrátane potreby N
         planning_query = """
-        SELECT * 
+        SELECT localname, company, crops, "25_26_yield_predictions", 
+               total_demand_n, total_demand_n_80, total_demand_p, total_demand_k
         FROM yield_level.mv_25_26_prediction_demand
         """
         
@@ -45,13 +47,10 @@ def get_planning_data(df):
         # Nahradenie prázdnych hodnôt pre numerické stĺpce
         numeric_columns = [
             '25_26_yield_predictions', 
-            'prediction_counts', 
             'total_demand_n', 
-            'total_demand_p', 
-            'total_demand_k', 
             'total_demand_n_80', 
-            'total_demand_p_80', 
-            'total_demand_k_80'
+            'total_demand_p', 
+            'total_demand_k'
         ]
         
         # Dynamicky nahradenie prázdnych hodnôt pre existujúce numerické stĺpce
@@ -117,8 +116,6 @@ def show_planning(df):
     </style>
     """, unsafe_allow_html=True)
     
-    # Odstraňujem debug text
-    
     st.header("📅 Plánovanie potreby živín pre sezónu 25/26")
     
     # Načítanie plánovacích dát
@@ -130,8 +127,6 @@ def show_planning(df):
         return
     
     # Filtre
-    st.subheader("🔍 Filtre")
-    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -181,159 +176,113 @@ def show_planning(df):
     # Tabuľka s predikciami
     st.subheader("📋 Predikované výnosy a potreby živín")
     
-    # Pripravenie dát pre tabuľku
-    display_df = filtered_df.copy()
-    
-    # Odobratie stĺpca prediction_counts
-    if 'prediction_counts' in display_df.columns:
-        display_df = display_df.drop(columns=['prediction_counts'])
-    
-    # Formátovanie numerických stĺpcov
-    numeric_columns = [
-        '25_26_yield_predictions', 
-        'total_demand_n', 
-        'total_demand_p', 
-        'total_demand_k', 
-        'total_demand_n_80', 
-        'total_demand_p_80', 
-        'total_demand_k_80'
-    ]
-    
-    for col in numeric_columns:
-        if col in display_df.columns:
-            # Bezpečná konverzia na numerické hodnoty
-            numeric_series = pd.to_numeric(display_df[col], errors='coerce')
-            
-            # Nahradenie NaN a nekonečných hodnôt nulou
-            numeric_series = numeric_series.fillna(0)
-            numeric_series = numeric_series.replace([np.inf, -np.inf], 0)
-            
-            if col.startswith('total_demand_'):
-                # Zaokrúhli demand stĺpce na celé čísla
-                display_df[col] = numeric_series.round(0).astype('Int64')
-            else:
-                # Ostatné numerické stĺpce zaokrúhli na 2 desatinné miesta
-                display_df[col] = numeric_series.round(2)
-    
     # Premenovanie stĺpcov pre lepšiu čitateľnosť
     column_mapping = {
-        'parcel_id': 'Parcela ID',
-        'crops': 'Plodina',
         'localname': 'Lokalita',
         'company': 'Spoločnosť',
+        'crops': 'Plodina',
         '25_26_yield_predictions': 'Predikovaný výnos (t/ha)',
         'total_demand_n': 'Potreba N',
-        'total_demand_p': 'Potreba P',
-        'total_demand_k': 'Potreba K',
         'total_demand_n_80': 'Potreba N (80%)',
-        'total_demand_p_80': 'Potreba P (80%)',
-        'total_demand_k_80': 'Potreba K (80%)'
+        'total_demand_p': 'Potreba P',
+        'total_demand_k': 'Potreba K'
     }
+    
+    # Pripravenie dát pre tabuľku
+    display_df = filtered_df.copy()
     
     # Premenovanie len existujúcich stĺpcov
     rename_dict = {old: new for old, new in column_mapping.items() if old in display_df.columns}
     display_df.rename(columns=rename_dict, inplace=True)
     
-    # Zoradenie podľa predikovaného výnosu, ak je stĺpec dostupný
-    if 'Predikovaný výnos (t/ha)' in display_df.columns:
-        display_df = display_df.sort_values('Predikovaný výnos (t/ha)', ascending=False)
-    
-    # Pridanie vlastného CSS pre atraktívnejšiu tabuľku
-    st.markdown("""
-    <style>
-    /* Moderný a atraktívny dizajn tabuľky */
-    .stDataFrame {
-        border-collapse: separate !important;
-        border-spacing: 0 !important;
-        border-radius: 15px !important;
-        overflow: hidden !important;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1), 0 6px 10px rgba(0,0,0,0.05) !important;
-        background-color: white !important;
-        background: linear-gradient(to right, #f4f6f7 0%, #ffffff 100%) !important;
-        border: 1px solid rgba(0,0,0,0.05) !important;
-    }
-    
-    .stDataFrame th {
-        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%) !important;
-        color: white !important;
-        font-weight: 700 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 1px !important;
-        border-bottom: 2px solid rgba(255,255,255,0.2) !important;
-        padding: 15px 20px !important;
-        font-size: 19px !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.2) !important;
-    }
-    
-    .stDataFrame td {
-        border-bottom: 1px solid #e9ecef !important;
-        padding: 12px 20px !important;
-        transition: all 0.3s ease !important;
-        font-size: 17px !important;
-    }
-    
-    .stDataFrame tr:nth-child(even) {
-        background-color: rgba(41, 128, 185, 0.05) !important;
-    }
-    
-    .stDataFrame tr:hover {
-        background-color: rgba(41, 128, 185, 0.1) !important;
-        transform: scale(1.01) !important;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.05) !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    /* Zvýraznenie stĺpca predikovaného výnosu */
-    .stDataFrame td:nth-child(5) {
-        font-weight: bold !important;
-        color: #2c3e50 !important;
-        background-color: rgba(46, 204, 113, 0.1) !important;
-    }
-    
-    /* Gradient pre dôležité hodnoty */
-    .stDataFrame td:nth-child(6), 
-    .stDataFrame td:nth-child(7), 
-    .stDataFrame td:nth-child(8) {
-        background: linear-gradient(to right, #f6d365 0%, #fda085 100%) !important;
-        color: white !important;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Responzívne nastavenia */
-    @media (max-width: 768px) {
-        .stDataFrame th, .stDataFrame td {
-            font-size: 16px !important;
-            padding: 10px 15px !important;
-        }
-    }
-    
-    /* Animácie */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .stDataFrame {
-        animation: fadeIn 0.5s ease-out !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     # Zobrazenie tabuľky
-    st.dataframe(
-        display_df,
-        height=500,
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            col: st.column_config.TextColumn(
-                label=col,
-                help=f"Stĺpec {col}",
-                width="small"
-            ) for col in display_df.columns
+    if not display_df.empty:
+        # Zobrazenie tabuľky
+        st.dataframe(display_df, use_container_width=True)
+        
+        # Export buttons pod tabuľkou
+        st.markdown("""
+        <style>
+        /* Kontajner pre tlačidlá bez medzier */
+        .export-buttons-container {
+            display: inline-flex;
+            width: 100%;
+            justify-content: center;
+            align-items: center;
+            margin: -15px 0 0 0 !important;
+            padding: 0 !important;
         }
-    )
+        
+        /* Úprava tlačidiel */
+        .export-buttons-container .stDownloadButton {
+            margin: 0 !important;
+            padding: 0 !important;
+            display: inline-block;
+        }
+        
+        .export-buttons-container .stDownloadButton > button {
+            width: 30px !important;
+            height: 30px !important;
+            min-width: 30px !important;
+            min-height: 30px !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 16px !important;
+            background-color: transparent !important;
+            border: 1px solid #e0e0e0 !important;
+            color: #666 !important;
+        }
+        
+        .export-buttons-container .stDownloadButton > button:hover {
+            background-color: #f0f0f0 !important;
+        }
+        
+        /* Odstránenie medzery pod tabuľkou */
+        .stDataFrame {
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Kontajner pre export tlačidlá
+        st.markdown('<div class="export-buttons-container">', unsafe_allow_html=True)
+        
+        # CSV download
+        csv = display_df.to_csv(index=False)
+        st.download_button(
+            label="📄",  # Simple document icon
+            data=csv,
+            file_name="planning_data.csv",
+            mime="text/csv",
+            help="Stiahnuť CSV",
+            key="csv_download_planning",
+            type="secondary"
+        )
+        
+        # Excel download
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            display_df.to_excel(writer, index=False, sheet_name='Plánovanie')
+        excel_buffer.seek(0)
+        
+        st.download_button(
+            label="📊",  # Spreadsheet/chart icon
+            data=excel_buffer,
+            file_name="planning_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Stiahnuť Excel",
+            key="excel_download_planning",
+            type="secondary"
+        )
+        
+        # Uzavretie kontajnera
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.warning("Po aplikovaní filtrov nie sú k dispozícii žiadne dáta.")
     
     # Grafy pre súhrn dát
     st.markdown("---")

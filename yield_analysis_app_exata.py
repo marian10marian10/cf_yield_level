@@ -13,6 +13,9 @@ from modules.advanced_analytics import show_advanced_analytics
 from modules.analyses import show_planning
 from modules.simple_maps import show_maps
 
+# Import the soil samples map function
+from soil_samples_map_app import soil_samples_map, about_page
+
 # Konfigurácia stránky
 st.set_page_config(
     page_title="Analýza výnosov DPB",
@@ -116,6 +119,11 @@ def main():
             "title": "🗺️ Mapy",
             "icon": "🗺️",
             "description": "Interaktívne mapy výnosov"
+        },
+        "soil_samples": {
+            "title": "🌍 Mapa Pôdnych Vzoriek",
+            "icon": "🌍",
+            "description": "Priestorová analýza pôdnych vzoriek"
         }
     }
     
@@ -293,6 +301,10 @@ def main():
         
     elif st.session_state.active_tab == "maps":
         show_maps(df)
+        
+    elif st.session_state.active_tab == "soil_samples":
+        # Call the soil samples map function
+        soil_samples_map()
         
     else:
         st.info("Vyberte kartu z menu vyššie.")
