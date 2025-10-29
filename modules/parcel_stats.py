@@ -7,6 +7,13 @@ import geopandas as gpd
 from shapely import wkt
 import folium
 from folium import plugins
+from modules.data_loader import (
+    DB_USER_DESTINATION, 
+    DB_PASSWORD_DESTINATION, 
+    DB_HOST_DESTINATION, 
+    DB_NAME_DESTINATION
+)
+from sqlalchemy import create_engine
 
 def create_crop_timeline_charts(df, parcel_name):
     """Vytvorenie malých grafov pre časovú postupnosť úrod pre jednotlivé plodiny"""
@@ -271,6 +278,10 @@ def create_parcel_map(df, selected_parcel):
         center_lat = (bounds[1] + bounds[3]) / 2
         
         # Výpočet vhodného zoom levelu na základe veľkosti parcely
+        lon_range = bounds[2] - bounds[0]
+        lat_range = bounds[3] - bounds[1]
+        max_range = max(lon_range, lat_range)
+        
         if max_range > 0.1:  # Veľká parcela
             zoom_level = 11  # Znížené z 12 na 11 pre lepší prehľad
         elif max_range > 0.01:  # Stredná parcela
@@ -278,7 +289,8 @@ def create_parcel_map(df, selected_parcel):
         else:  # Malá parcela
             zoom_level = 17  # Znížené z 18 na 17 pre lepší prehľad
         
-        # Vytvorenie mapy pomocou folium
+        # Nastavenie bounds s paddingom pre zobrazenie celej parcely
+        padding = max_range * 0.1  # 10% padding okolo parcely
         m = folium.Map(
             location=[center_lat, center_lon],
             zoom_start=zoom_level,
@@ -287,7 +299,6 @@ def create_parcel_map(df, selected_parcel):
         )
         
         # Nastavenie bounds s paddingom pre zobrazenie celej parcely
-        padding = max_range * 0.1  # 10% padding okolo parcely
         m.fit_bounds([
             [bounds[1] - padding, bounds[0] - padding],
             [bounds[3] + padding, bounds[2] + padding]
@@ -908,156 +919,229 @@ def create_all_parcels_map(df):
         return None
 
 def show_parcel_statistics(df, selected_parcel):
-    """Zobrazenie štatistík na úrovni parcely"""
-    st.header("🏞️ Štatistiky na úrovni parcely")
+    """Zobrazenie štatistík parcely z materialized view"""
+    st.header("🏞️ Štatistiky parcely")
     
-    if not selected_parcel:
-        st.info("Vyberte parcelu z filtra hore.")
-        return
+    # Pripojenie k databáze
+    connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
+    engine = create_engine(connection_string)
     
-    # Filtrovanie dát pre vybranú parcelu
-    # Konverzia na string pre správne porovnanie
-    parcel_data = df[df['name'].astype(str) == selected_parcel].copy()
-    
-    if parcel_data.empty:
-        st.error(f"Pre parcelu {selected_parcel} nie sú dostupné žiadne dáta.")
-        return
-    
-    # Základné informácie o parcieli
-    st.subheader(f"📋 Informácie o parcieli: {selected_parcel}")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Počet záznamov", f"{len(parcel_data):,}")
-    
-    with col2:
-        st.metric("Počet plodín", f"{parcel_data['crop'].nunique()}")
-    
-    with col3:
-        st.metric("Obdobie", f"{parcel_data['year'].min()} - {parcel_data['year'].max()}")
-    
-    with col4:
-        st.metric("Priemerná plocha", f"{parcel_data['area'].mean():.2f} ha")
-    
-    # Porovnanie plodín
-    st.subheader("🌾 Porovnanie plodín")
-    crop_comparison_fig = create_parcel_crop_comparison(df, selected_parcel)
-    if crop_comparison_fig:
-        st.plotly_chart(crop_comparison_fig, use_container_width=True)
-    
-    # Časové grafy pre jednotlivé plodiny
-    st.subheader("📈 Časové grafy úrod pre jednotlivé plodiny")
-    st.info("Grafy sa zobrazujú len pre plodiny s viac ako 2 záznamami")
-    
-    crop_timeline_result = create_crop_timeline_charts(df, selected_parcel)
-    if not crop_timeline_result:
-        st.warning("Pre túto parcelu nie sú dostupné plodiny s dostatočným počtom záznamov pre vytvorenie časových grafov.")
-    
-    # Detailné dáta parcely
-    st.subheader("📊 Detailné dáta parcely")
-    
-    # Agregované dáta podľa roku a plodiny
-    parcel_summary = parcel_data.groupby(['year', 'crop']).agg({
-        'yield_ha': 'mean',
-        'yield_percentage': 'mean',
-        'area': 'mean'
-    }).round(2).reset_index()
-    
-    st.dataframe(
-        parcel_summary.sort_values(['year', 'crop'], ascending=[False, True]),
-        use_container_width=True
-    )
-    
-    # Radarový graf výkonnosti
-    st.subheader("🎯 Radarový graf výkonnosti")
-    radar_fig = create_parcel_performance_radar(df, selected_parcel)
-    if radar_fig:
-        st.plotly_chart(radar_fig, use_container_width=True)
-    
-    # Mapa parcely
-    st.subheader("🗺️ Datová mapa vybranej parcely")
-    
-    # Výber typu mapy
-    map_type = st.radio(
-        "Vyberte typ mapy:",
-        ["Datová mapa s mriežkou (odporúčané)", "Základná mapa"],
-        horizontal=True,
-        key="map_type_selector"
-    )
-    
-    # Informácie o vybranej parcieli
-    if not parcel_data.empty:
-        col1, col2 = st.columns(2)
+    try:
+        from sqlalchemy.sql import text
+        
+        # Príprava rôznych vyhľadávacích reťazcov
+        search_variants = [
+            selected_parcel,  # Presný reťazec
+            selected_parcel.strip(),  # Bez medzier
+            selected_parcel.replace('_', ''),  # Bez podtržítek
+            selected_parcel.replace(' ', ''),  # Bez medzier
+        ]
+        
+        # Načítanie dát pre vybranú parcelu
+        query = text("""
+        SELECT * 
+        FROM yield_level.mv_skeagis_source 
+        WHERE 
+            REPLACE(REPLACE(TRIM(localname), '_', ''), ' ', '') = 
+            REPLACE(REPLACE(TRIM(:parcel_name), '_', ''), ' ', '')
+        ORDER BY season_id
+        """)
+        
+        # Skúšame rôzne varianty vyhľadávania
+        parcel_data = None
+        for variant in search_variants:
+            with engine.connect() as connection:
+                result = pd.read_sql(
+                    query, 
+                    connection, 
+                    params={'parcel_name': variant}
+                )
+                
+                if not result.empty:
+                    parcel_data = result
+                    break
+        
+        # Ak stále nemáme dáta, skúsime čiastočnú zhodu
+        if parcel_data is None or parcel_data.empty:
+            query_partial = text("""
+            SELECT * 
+            FROM yield_level.mv_skeagis_source 
+            WHERE 
+                REPLACE(REPLACE(TRIM(localname), '_', ''), ' ', '') 
+                ILIKE 
+                REPLACE(REPLACE(TRIM(:parcel_pattern), '_', ''), ' ', '')
+            ORDER BY season_id
+            """)
+            
+            with engine.connect() as connection:
+                parcel_data = pd.read_sql(
+                    query_partial, 
+                    connection, 
+                    params={'parcel_pattern': f'%{selected_parcel}%'}
+                )
+        
+        if parcel_data is None or parcel_data.empty:
+            st.error(f"Pre parcelu {selected_parcel} nie sú dostupné žiadne dáta.")
+            
+            # Zobrazenie dostupných parciel pre kontrolu
+            query_available = text("""
+            SELECT DISTINCT localname 
+            FROM yield_level.mv_skeagis_source 
+            ORDER BY localname 
+            LIMIT :limit_count
+            """)
+            
+            with engine.connect() as connection:
+                available_parcels = pd.read_sql(
+                    query_available, 
+                    connection, 
+                    params={'limit_count': 20}
+                )
+            
+            st.warning("Dostupné parcely:")
+            st.dataframe(available_parcels, use_container_width=True)
+            
+            return
+        
+        # Základné informácie o parcele
+        st.subheader(f"📋 Informácie o parcele: {selected_parcel}")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
-            st.info(f"**Parcela:** {selected_parcel}")
+            st.metric("Počet záznamov", f"{len(parcel_data):,}")
+        
         with col2:
-            st.info(f"**Výnosnosť:** {parcel_data['yield_percentage'].mean():.1f}%")
-    
-    with st.spinner("Generujem datovú mapu parcely s mriežkou..."):
-        if map_type == "Datová mapa s mriežkou (odporúčané)":
-            map_fig = create_enhanced_parcel_map(df, selected_parcel)
-        else:
-            map_fig = create_parcel_map(df, selected_parcel)
-            
-        if map_fig:
-            # Pre folium mapu používame st.components.html
-            folium_static = map_fig._repr_html_()
-            st.components.v1.html(folium_static, height=700)
-            
-            # Pridanie informácií o mape
-            if map_type == "Základná mapa":
-                st.info("Základná mapa zobrazuje parcela s minimálnymi informáciami.")
-        else:
-            st.warning("Nepodarilo sa vytvoriť mapu parcely. Skontrolujte, či sú dostupné geometrické dáta.")
-    
-    # Základné metriky parcely
-    st.subheader("📊 Základné metriky parcely")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Variabilita výnosov
-        yield_variability = parcel_data['yield_ha'].std() / parcel_data['yield_ha'].mean() * 100
-        st.metric("Variabilita výnosov (CV)", f"{yield_variability:.1f}%")
+            st.metric("Počet plodín", f"{parcel_data['crop'].nunique()}")
         
-        # Najlepší rok
-        best_year = parcel_data.loc[parcel_data['yield_ha'].idxmax()]
-        st.metric("Najlepší rok", f"{best_year['year']} ({best_year['crop']})")
-    
-    with col2:
-        # Priemerná výnosnosť
-        avg_performance = parcel_data['yield_percentage'].mean()
-        st.metric("Priemerná výnosnosť", f"{avg_performance:.1f}%")
+        with col3:
+            st.metric("Sezóny", f"{parcel_data['season_id'].min()} - {parcel_data['season_id'].max()}")
         
-        # Najhorší rok
-        worst_year = parcel_data.loc[parcel_data['yield_ha'].idxmin()]
-        st.metric("Najhorší rok", f"{worst_year['year']} ({worst_year['crop']})")
-    
-    # Odporúčania pre parcelu
-    st.subheader("💡 Odporúčania pre parcelu")
-    
-    # Analýza výkonnosti
-    if avg_performance < 80:
-        st.warning("Parcela má podpriemernú výnosnosť. Odporúčame:")
-        st.write("- Analýzu pôdnych podmienok")
-        st.write("- Optimalizáciu agrotechniky")
-        st.write("- Zváženie zmeny plodín")
-    elif avg_performance < 100:
-        st.info("Parcela má priemernú výnosnosť. Možnosti zlepšenia:")
-        st.write("- Jemné doladenie agrotechniky")
-        st.write("- Optimalizácia termínov sejby a zberu")
-    else:
-        st.success("Parcela má výbornú výnosnosť! Pokračujte v súčasnom prístupe.")
-    
-    # Export dát parcely
-    st.subheader("💾 Export dát parcely")
-    
-    if st.button("Export CSV pre parcelu"):
-        csv = parcel_data.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="Stiahnuť CSV",
-            data=csv,
-            file_name=f"parcela_{selected_parcel.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
+        with col4:
+            st.metric("Priemerná plocha", f"{parcel_data['area_ha'].mean():.2f} ha")
+        
+        # Agregácia dát podľa plodiny
+        crop_stats = parcel_data.groupby('crop').agg({
+            'sk_yield_ha': ['mean', 'std', 'count'],
+            'area_ha': 'mean'
+        }).round(2)
+        
+        crop_stats.columns = ['priemerny_vyos', 'std_vyos', 'pocet_rokov', 'priemerna_plocha']
+        crop_stats = crop_stats.reset_index()
+        
+        # Výpočet celkového priemerného výnosu pre porovnanie
+        total_avg_yield = parcel_data['sk_yield_ha'].mean()
+        
+        # Porovnanie s celkovým priemerom
+        crop_stats['odchylka_od_priemeru'] = ((crop_stats['priemerny_vyos'] - total_avg_yield) / total_avg_yield * 100).round(2)
+        
+        # Graf porovnania plodín
+        st.subheader("🌾 Porovnanie plodín")
+        
+        # Bar chart s priemerným výnosom
+        fig_crops = px.bar(
+            crop_stats, 
+            x='crop', 
+            y='priemerny_vyos', 
+            color='odchylka_od_priemeru',
+            color_continuous_scale='RdYlGn',
+            title='Priemerné výnosy podľa plodín',
+            labels={'crop': 'Plodina', 'priemerny_vyos': 'Priemerný výnos (t/ha)'}
         )
+        st.plotly_chart(fig_crops, use_container_width=True)
+        
+        # Tabuľka s porovnaním plodín
+        st.subheader("📊 Detailné porovnanie plodín")
+        
+        st.dataframe(
+            crop_stats.drop(columns=['std_vyos', 'priemerna_plocha', 'odchylka_od_priemeru']),
+            use_container_width=True
+        )
+        
+        # Detailná história parcely
+        st.subheader("📈 História parcely")
+        st.dataframe(
+            parcel_data.sort_values('season_id', ascending=False).drop(columns=['parcel_season_id', 'parcel_id', 'geometry']),
+            use_container_width=True
+        )
+        
+        # Histogram výnosov
+        # Removed distribution of yields section
+        
+        # Mapa parcely
+        st.subheader("🗺️ Lokalizácia parcely")
+        
+        # Kontrola dostupnosti geometrie
+        if 'geometry' in parcel_data.columns and not parcel_data['geometry'].isna().all():
+            # Použitie prvej dostupnej geometrie
+            geometry_str = parcel_data['geometry'].dropna().iloc[0]
+            
+            try:
+                # Konverzia geometrie
+                from shapely import wkt
+                import geopandas as gpd
+                import folium
+                from shapely.wkb import loads as wkb_loads
+                import binascii
+                
+                # Pokus o konverziu WKB
+                try:
+                    # Odstránenie medzier a konverzia na bytes
+                    geometry_str = geometry_str.replace(' ', '')
+                    parcel_geometry = wkb_loads(binascii.unhexlify(geometry_str))
+                except Exception as wkb_err:
+                    # Ak WKB zlyhá, skúsiť WKT
+                    try:
+                        parcel_geometry = wkt.loads(geometry_str)
+                    except Exception as wkt_err:
+                        raise ValueError(f"Nepodarilo sa spracovať geometriu: WKB chyba: {wkb_err}, WKT chyba: {wkt_err}")
+                
+                # Vytvorenie GeoDataFrame so správnym súradnicovým systémom
+                gdf = gpd.GeoDataFrame([{'name': selected_parcel, 'geometry': parcel_geometry}])
+                gdf.set_crs(epsg=5514, inplace=True)  # Nastavenie pôvodného súradnicového systému
+                
+                # Transformácia do WGS84 (EPSG:4326) pre mapu
+                gdf_wgs84 = gdf.to_crs(epsg=4326)
+                
+                # Výpočet stredu a bounds pre mapu
+                bounds = gdf_wgs84.total_bounds
+                center_lon = (bounds[0] + bounds[2]) / 2
+                center_lat = (bounds[1] + bounds[3]) / 2
+                
+                # Vytvorenie mapy
+                m = folium.Map(
+                    location=[center_lat, center_lon],
+                    zoom_start=14,
+                    tiles='CartoDB positron'
+                )
+                
+                # Pridanie parcely
+                folium.GeoJson(
+                    gdf_wgs84,
+                    style_function=lambda x: {
+                        'fillColor': '#3498db',
+                        'color': '#000000',
+                        'weight': 2,
+                        'fillOpacity': 0.5
+                    }
+                ).add_to(m)
+                
+                # Zobrazenie mapy
+                folium_static = m._repr_html_()
+                st.components.v1.html(folium_static, height=500)
+            
+            except Exception as e:
+                st.warning(f"Nepodarilo sa zobraziť mapu parcely: {e}")
+                # Pridať debug informácie
+                st.text(f"Pôvodná geometria: {geometry_str}")
+                st.text(f"Typ geometrie: {type(geometry_str)}")
+                st.text(f"Dĺžka geometrie: {len(geometry_str)}")
+        else:
+            st.warning("Pre túto parcelu nie sú dostupné geometrické údaje.")
+    
+    except Exception as e:
+        st.error(f"Chyba pri spracovaní dát parcely: {e}")
+    
+    finally:
+        # Zatvorenie databázového spojenia
+        engine.dispose()

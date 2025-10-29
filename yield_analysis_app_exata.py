@@ -8,7 +8,7 @@ warnings.filterwarnings('ignore')
 from modules.data_loader import load_data, calculate_yield_percentage
 from modules.enterprise_stats import show_enterprise_statistics
 from modules.parcel_stats import show_parcel_statistics
-from modules.crop_stats import show_crop_statistics
+from modules.crop_stats_db import show_crop_statistics_from_db
 from modules.advanced_analytics import show_advanced_analytics
 from modules.analyses import show_planning
 from modules.simple_maps import show_maps
@@ -87,10 +87,15 @@ def main():
             "icon": "🏢",
             "description": "Prehľad štatistík na úrovni podniku"
         },
-        "crop": {
-            "title": "🌱 Štatistiky plodiny",
+        "crop_db": {
+            "title": "🌱 Štatistiky plodiny (DB)",
             "icon": "🌱",
-            "description": "Analýza výnosov podľa plodiny"
+            "description": "Detailná analýza výnosov plodín z databázy"
+        },
+        "crop": {
+            "title": "🌾 Štatistiky plodiny (CSV)",
+            "icon": "🌾",
+            "description": "Analýza výnosov podľa plodiny z CSV"
         },
         "parcel": {
             "title": "🏞️ Štatistiky parcely",
@@ -150,8 +155,10 @@ def main():
     # Inicializácia session state pre plodinu
     available_crops = sorted(df['crop'].astype(str).dropna().unique())
     if 'selected_crop' not in st.session_state:
-        # Hľadanie indexu pre PŠENICE OZ.
-        if "PŠENICE OZ." in available_crops:
+        # Nastavenie "Pšenica letná ozimná" ako predvolenej plodiny
+        if "Pšenica letná ozimná" in available_crops:
+            st.session_state.selected_crop = "Pšenica letná ozimná"
+        elif "PŠENICE OZ." in available_crops:
             st.session_state.selected_crop = "PŠENICE OZ."
         else:
             st.session_state.selected_crop = available_crops[0]
@@ -163,19 +170,70 @@ def main():
     if st.session_state.active_tab == "enterprise":
         show_enterprise_statistics(df, st.session_state.selected_crop)
         
-    elif st.session_state.active_tab == "crop":
-        # Filter pre plodinu na karte plodiny
+    elif st.session_state.active_tab == "crop_db":
+        # Filter pre plodinu na karte plodiny z databázy
         st.markdown('<div class="filter-container">', unsafe_allow_html=True)
         st.subheader("🔍 Filtre")
+        
+        # Pripojenie k databáze pre štatistiky plodiny
+        from sqlalchemy import create_engine
+        from modules.data_loader import (
+            DB_USER_DESTINATION, 
+            DB_PASSWORD_DESTINATION, 
+            DB_HOST_DESTINATION, 
+            DB_NAME_DESTINATION
+        )
+        
+        connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
+        engine = create_engine(connection_string)
+        
+        # Načítanie dostupných plodín z databázy
+        query = """
+        SELECT DISTINCT crop 
+        FROM yield_level.mv_skeagis_source 
+        ORDER BY crop
+        """
+        available_db_crops = pd.read_sql(query, engine)['crop'].tolist()
+        
+        # Nastavenie indexu pre "Pšenica letná ozimná"
+        default_index = 0
+        if "Pšenica letná ozimná" in available_db_crops:
+            default_index = available_db_crops.index("Pšenica letná ozimná")
+        
+        selected_crop = st.selectbox(
+            "Vyberte plodinu:", 
+            available_db_crops, 
+            index=default_index,
+            key="crop_db_selector"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        show_crop_statistics_from_db(selected_crop)
+        
+        # Zatvorenie databázového spojenia
+        engine.dispose()
+        
+    elif st.session_state.active_tab == "crop":
+        # Filter pre plodinu na karte plodiny z CSV
+        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+        st.subheader("🔍 Filtre")
+        
+        # Nastavenie indexu pre "Pšenica letná ozimná"
+        default_index = 0
+        if "Pšenica letná ozimná" in available_crops:
+            default_index = available_crops.index("Pšenica letná ozimná")
+        
         selected_crop = st.selectbox(
             "Vyberte plodinu:", 
             available_crops, 
-            index=available_crops.index(st.session_state.selected_crop),
-            key="crop_crop_selector"
+            index=default_index,
+            key="crop_csv_selector"
         )
         st.session_state.selected_crop = selected_crop
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Volanie pôvodnej funkcie pre CSV štatistiky
+        from modules.crop_stats import show_crop_statistics
         show_crop_statistics(df, selected_crop)
         
     elif st.session_state.active_tab == "parcel":
@@ -183,14 +241,35 @@ def main():
         st.markdown('<div class="filter-container">', unsafe_allow_html=True)
         st.subheader("🔍 Filtre")
         
-        # Získanie zoznamu parciel
-        available_parcels = sorted([str(parcel) for parcel in df['name'].unique() if pd.notna(parcel)])
+        # Pripojenie k databáze pre načítanie lokalít
+        from sqlalchemy import create_engine
+        from modules.data_loader import (
+            DB_USER_DESTINATION, 
+            DB_PASSWORD_DESTINATION, 
+            DB_HOST_DESTINATION, 
+            DB_NAME_DESTINATION
+        )
+        
+        connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
+        engine = create_engine(connection_string)
+        
+        # Načítanie zoznamu lokalít
+        query = """
+        SELECT DISTINCT localname 
+        FROM yield_level.mv_skeagis_source 
+        ORDER BY localname
+        """
+        
+        available_parcels = pd.read_sql(query, engine)['localname'].tolist()
+        
+        # Zatvorenie databázového spojenia
+        engine.dispose()
         
         if not available_parcels:
             st.error("Nie sú dostupné žiadne parcely.")
             return
         
-        # Výber parcely s predvolenou hodnotou "Akat Velky 1"
+        # Výber parcely s predvolenou hodnotou
         default_index = 0
         if "Akat Velky 1" in available_parcels:
             default_index = available_parcels.index("Akat Velky 1")
