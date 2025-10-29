@@ -17,135 +17,51 @@ DB_NAME_DESTINATION = 'postgres'
 
 
 def get_planning_data(df):
-    """
-    Získa parcely pre sezónu 25_26 a vypočíta predicted_yield na základe historických dát
-    
-    Args:
-        df: DataFrame s historickými výnosmi z databázy
-    
-    Returns:
-        DataFrame s predikovanými výnosmi pre sezónu 25_26
-    """
+    """Načítanie plánovacích dát z PostgreSQL databázy"""
     try:
-        # Pripojenie k databáze
+        # Vytvorenie connection string
         connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
+        
+        # Vytvorenie engine
         engine = create_engine(connection_string)
         
-        # Najprv skontrolujme dostupné stĺpce
-        check_columns_query = """
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_schema = 'yield_level' 
-        AND table_name = 'cf_parcel_season'
-        ORDER BY ordinal_position
+        # Komplexnejší SQL dopyt pre načítanie dát vrátane potreby N
+        planning_query = """
+        SELECT * 
+        FROM yield_level.mv_25_26_prediction_demand
         """
         
-        columns_df = pd.read_sql(check_columns_query, engine)
-        available_columns = columns_df['column_name'].tolist()
+        # Vykonanie dopytu a načítanie dát
+        planning_df = pd.read_sql(planning_query, engine)
         
-        # Debug: zobraz dostupné stĺpce
-        with st.expander("🔍 Debug: Dostupné stĺpce v cf_parcel_season"):
-            st.dataframe(columns_df)
-        
-        # Preferuj "season_id"; fallback na "season"
-        if 'season_id' in available_columns:
-            season_column = 'season_id'
-        elif 'season' in available_columns:
-            season_column = 'season'
-        else:
-            st.error(f"Nenašiel som stĺpec 'season_id' ani 'season' v tabuľke cf_parcel_season. Dostupné stĺpce: {available_columns}")
-            engine.dispose()
-            return pd.DataFrame()
-        
-        # Načítanie parciel pre sezónu 25_26
-        planning_query = f"""
-        SELECT DISTINCT
-            ps.parcel_id,
-            ps.company,
-            lc.localname
-        FROM yield_level.cf_parcel_season ps
-        LEFT JOIN lookups.lookup_sklpis_parcels lc ON ps.parcel_id = lc.parcel_id
-        WHERE ps.{season_column} = '25_26'
-        """
-        
-        parcels_df = pd.read_sql(planning_query, engine)
-        
-        # Debug: zobraz počet načítaných parciel
-        st.info(f"Načítané parcely: {len(parcels_df)}")
-        
-        if parcels_df.empty:
-            st.warning("Žiadne parcely pre sezónu 25_26")
-            engine.dispose()
-            return pd.DataFrame()
-        
-        # Načítanie plodín pre sezónu 25_26
-        # V cf_parcel_season je stĺpec "crop" (nie ppa_crop_id)
-        crops_query = f"""
-        SELECT DISTINCT
-            ps.parcel_id,
-            ps.crop
-        FROM yield_level.cf_parcel_season ps
-        WHERE ps.{season_column} = '25_26' AND ps.crop IS NOT NULL
-        """
-        
-        crops_df = pd.read_sql(crops_query, engine)
-        
-        # Spojenie parciel s plodinami
-        planning_df = parcels_df.merge(crops_df, on='parcel_id', how='left')
-        
+        # Zatvorenie spojenia
         engine.dispose()
         
         if planning_df.empty:
             st.warning("Žiadne dáta pre sezónu 25_26")
             return pd.DataFrame()
         
-        # Company je už načítané z query, len vyplň nan hodnoty
-        if 'company' in planning_df.columns:
-            planning_df['company'] = planning_df['company'].fillna('Neznáma')
-        else:
-            planning_df['company'] = 'Neznáma'
+        # Nahradenie prázdnych hodnôt pre numerické stĺpce
+        numeric_columns = [
+            '25_26_yield_predictions', 
+            'prediction_counts', 
+            'total_demand_n', 
+            'total_demand_p', 
+            'total_demand_k', 
+            'total_demand_n_80', 
+            'total_demand_p_80', 
+            'total_demand_k_80'
+        ]
         
-        # Vypočítanie predicted_yield pre každú parcelu
-        results = []
+        # Dynamicky nahradenie prázdnych hodnôt pre existujúce numerické stĺpce
+        for col in numeric_columns:
+            if col in planning_df.columns:
+                planning_df[col] = pd.to_numeric(planning_df[col], errors='coerce').fillna(0)
         
-        for _, row in planning_df.iterrows():
-            parcel_id = row['parcel_id']
-            crop = row['crop']
-            company = row['company']
-            name = row['localname'] if pd.notna(row['localname']) else parcel_id
-            
-            # Filtrovanie historických dát pre túto parcelu a plodinu
-            historical_data = df[(df['parcel_id'] == parcel_id) & (df['crop'] == crop)].copy()
-            
-            if not historical_data.empty:
-                # Predikcia = priemer z minulých výnosov
-                predicted_yield = historical_data['yield_ha'].mean()
-                number_of_data = len(historical_data)
-            else:
-                # Ak nemáme historické dáta, použijeme všeobecný priemer pre túto plodinu
-                crop_data = df[df['crop'] == crop]
-                if not crop_data.empty:
-                    predicted_yield = crop_data['yield_ha'].mean()
-                    number_of_data = 0  # 0 lebo nemáme históriu pre túto parcelu
-                else:
-                    predicted_yield = 0
-                    number_of_data = 0
-            
-            results.append({
-                'parcel_id': parcel_id,
-                'name': name,
-                'crop': crop,
-                'company': company,
-                'predicted_yield': predicted_yield,
-                'number_of_data': number_of_data
-            })
-        
-        result_df = pd.DataFrame(results)
-        
-        return result_df
-        
+        return planning_df
+    
     except Exception as e:
-        st.error(f"Chyba pri načítavaní plánovacích dát: {e}")
+        st.error(f"Chyba pri načítaní plánovacích dát: {e}")
         import traceback
         st.error(traceback.format_exc())
         return pd.DataFrame()
@@ -172,133 +88,122 @@ def show_planning(df):
         st.warning("Žiadne dáta pre plánovanie.")
         return
     
-    # Základné štatistiky
-    st.subheader("📈 Prehľad predikcií")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_parcels = len(planning_df)
-        st.metric("Počet parciel", f"{total_parcels}")
-    
-    with col2:
-        avg_predicted = planning_df['predicted_yield'].mean()
-        st.metric("Priemerná predikcia", f"{avg_predicted:.2f} t/ha")
-    
-    with col3:
-        parcels_with_history = (planning_df['number_of_data'] > 0).sum()
-        st.metric("Parcele s históriou", f"{parcels_with_history}")
-    
-    with col4:
-        parcels_without_history = (planning_df['number_of_data'] == 0).sum()
-        st.metric("Parcele bez histórie", f"{parcels_without_history}")
-    
-    st.markdown("---")
-    
-    # Filter podľa spoločnosti
+    # Filtre
     st.subheader("🔍 Filtre")
     
-    available_companies = sorted(planning_df['company'].dropna().unique())
-    
     col1, col2 = st.columns(2)
+    
     with col1:
-        selected_company = st.selectbox(
-            "Filtrovať podľa spoločnosti:",
-            options=['všetky'] + available_companies,
-            key="planning_company_filter"
-        )
+        # Bezpečné načítanie spoločností
+        company_col = 'company'
+        if company_col in planning_df.columns:
+            available_companies = sorted(planning_df[company_col].dropna().unique())
+            selected_company = st.selectbox(
+                "Filtrovať podľa spoločnosti:",
+                options=['všetky'] + available_companies,
+                key="planning_company_filter"
+            )
+        else:
+            st.warning("Stĺpec spoločnosti nie je dostupný.")
+            selected_company = 'všetky'
     
     with col2:
-        available_crops = sorted(planning_df['crop'].dropna().unique())
-        selected_crop = st.selectbox(
-            "Filtrovať podľa plodiny:",
-            options=['všetky plodiny'] + available_crops,
-            key="planning_crop_filter"
-        )
+        # Bezpečné načítanie plodín
+        crop_col = 'crops'
+        if crop_col in planning_df.columns:
+            available_crops = sorted(planning_df[crop_col].dropna().unique())
+            selected_crop = st.selectbox(
+                "Filtrovať podľa plodiny:",
+                options=['všetky plodiny'] + available_crops,
+                key="planning_crop_filter"
+            )
+        else:
+            st.warning("Stĺpec plodín nie je dostupný.")
+            selected_crop = 'všetky plodiny'
+    
+    st.markdown("---")
     
     # Aplikovanie filtrov
     filtered_df = planning_df.copy()
-    if selected_company != 'všetky':
-        filtered_df = filtered_df[filtered_df['company'] == selected_company]
-    if selected_crop != 'všetky plodiny':
-        filtered_df = filtered_df[filtered_df['crop'] == selected_crop]
     
-    st.markdown("---")
+    if selected_company != 'všetky' and company_col in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df[company_col] == selected_company]
+    
+    if selected_crop != 'všetky plodiny' and crop_col in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df[crop_col] == selected_crop]
     
     # Tabuľka s predikciami
-    st.subheader("📋 Predikované výnosy")
+    st.subheader("📋 Predikované výnosy a potreby živín")
     
     # Pripravenie dát pre tabuľku
-    display_df = filtered_df[['parcel_id', 'name', 'crop', 'company', 'predicted_yield', 'number_of_data']].copy()
+    display_df = filtered_df.copy()
     
-    # Formátovanie
-    display_df['predicted_yield'] = display_df['predicted_yield'].round(2)
-    display_df['number_of_data'] = display_df['number_of_data'].astype(int)
+    # Formátovanie numerických stĺpcov
+    numeric_columns = [
+        '25_26_yield_predictions', 
+        'prediction_counts', 
+        'total_demand_n', 
+        'total_demand_p', 
+        'total_demand_k', 
+        'total_demand_n_80', 
+        'total_demand_p_80', 
+        'total_demand_k_80'
+    ]
     
-    # Premenovanie stĺpcov
-    display_df.columns = ['Parcela ID', 'Názov parcely', 'Plodina', 'Spoločnosť', 'Predikovaný výnos (t/ha)', 'Počet historických dát']
+    for col in numeric_columns:
+        if col in display_df.columns:
+            # Bezpečná konverzia na numerické hodnoty
+            numeric_series = pd.to_numeric(display_df[col], errors='coerce')
+            
+            # Nahradenie NaN a nekonečných hodnôt nulou
+            numeric_series = numeric_series.fillna(0)
+            numeric_series = numeric_series.replace([np.inf, -np.inf], 0)
+            
+            if col.startswith('total_demand_'):
+                # Zaokrúhli demand stĺpce na celé čísla
+                display_df[col] = numeric_series.round(0).astype('Int64')
+            else:
+                # Ostatné numerické stĺpce zaokrúhli na 2 desatinné miesta
+                display_df[col] = numeric_series.round(2)
     
-    # Zoradenie podľa predikovaného výnosu
-    display_df = display_df.sort_values('Predikovaný výnos (t/ha)', ascending=False)
+    # Premenovanie stĺpcov pre lepšiu čitateľnosť
+    column_mapping = {
+        'parcel_id': 'Parcela ID',
+        'crops': 'Plodina',
+        'localname': 'Lokalita',
+        'company': 'Spoločnosť',
+        '25_26_yield_predictions': 'Predikovaný výnos (t/ha)',
+        'prediction_counts': 'Počet predikcií',
+        'total_demand_n': 'Potreba N',
+        'total_demand_p': 'Potreba P',
+        'total_demand_k': 'Potreba K',
+        'total_demand_n_80': 'Potreba N (80%)',
+        'total_demand_p_80': 'Potreba P (80%)',
+        'total_demand_k_80': 'Potreba K (80%)'
+    }
+    
+    # Premenovanie len existujúcich stĺpcov
+    rename_dict = {old: new for old, new in column_mapping.items() if old in display_df.columns}
+    display_df.rename(columns=rename_dict, inplace=True)
+    
+    # Zoradenie podľa predikovaného výnosu, ak je stĺpec dostupný
+    if 'Predikovaný výnos (t/ha)' in display_df.columns:
+        display_df = display_df.sort_values('Predikovaný výnos (t/ha)', ascending=False)
     
     # Zobrazenie tabuľky
-    st.markdown("""
-    <style>
-    .stDataFrame {
-        text-align: left !important;
-    }
-    .stDataFrame th {
-        text-align: left !important;
-    }
-    .stDataFrame td {
-        text-align: left !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Explicitly convert numeric columns to strings with left-aligned formatting
-    display_df['Predikovaný výnos (t/ha)'] = display_df['Predikovaný výnos (t/ha)'].apply(lambda x: f'{x:.2f}')
-    display_df['Počet historických dát'] = display_df['Počet historických dát'].astype(str)
-    
     st.dataframe(
         display_df,
         height=500,
         hide_index=True,
         use_container_width=True,
         column_config={
-            "Parcela ID": st.column_config.TextColumn(
-                label="Parcela ID",
-                help="Identifikátor parcely",
+            col: st.column_config.TextColumn(
+                label=col,
+                help=f"Stĺpec {col}",
                 width="small"
-            ),
-            "Názov parcely": st.column_config.TextColumn(
-                label="Názov parcely",
-                help="Názov parcely",
-                width="medium"
-            ),
-            "Plodina": st.column_config.TextColumn(
-                label="Plodina",
-                help="Typ plodiny",
-                width="small"
-            ),
-            "Spoločnosť": st.column_config.TextColumn(
-                label="Spoločnosť",
-                help="Spoločnosť",
-                width="small"
-            ),
-            "Predikovaný výnos (t/ha)": st.column_config.TextColumn(
-                label="Predikovaný výnos (t/ha)",
-                help="Predikovaný výnos v tonách na hektár",
-                width="small"
-            ),
-            "Počet historických dát": st.column_config.TextColumn(
-                label="Počet historických dát",
-                help="Počet historických záznamov pre predikciu",
-                width="small"
-            )
-        },
-        column_order=["Parcela ID", "Názov parcely", "Plodina", "Spoločnosť", "Predikovaný výnos (t/ha)", "Počet historických dát"]
+            ) for col in display_df.columns
+        }
     )
     
     # Poznámka
-    st.info("💡 **Poznámka:** Parcele s 0 počtom dát nemajú historické údaje a predikcia je založená na všeobecnom priemere pre danú plodinu.")
+    st.info("💡 **Poznámka:** Tabuľka zobrazuje predikcie výnosov a potreby živín pre sezónu 25_26.")

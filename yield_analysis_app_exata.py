@@ -148,7 +148,7 @@ def main():
     df = calculate_yield_percentage(df)
     
     # Inicializácia session state pre plodinu
-    available_crops = sorted(df['crop'].unique())
+    available_crops = sorted(df['crop'].astype(str).dropna().unique())
     if 'selected_crop' not in st.session_state:
         # Hľadanie indexu pre PŠENICE OZ.
         if "PŠENICE OZ." in available_crops:
