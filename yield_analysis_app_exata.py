@@ -85,20 +85,15 @@ def main():
     
     # Menu možnosti
     menu_options = {
-        "enterprise": {
-            "title": "🏢 Štatistiky podniku",
-            "icon": "🏢",
-            "description": "Prehľad štatistík na úrovni podniku"
+        "enterprise_db_prediction": {
+            "title": "🏭 Štatistiky podniku (Predikcia)",
+            "icon": "🏭",
+            "description": "Štatistiky podniku pre sezónu 25/26"
         },
         "crop_db": {
             "title": "🌱 Štatistiky plodiny (DB)",
             "icon": "🌱",
             "description": "Detailná analýza výnosov plodín z databázy"
-        },
-        "crop": {
-            "title": "🌾 Štatistiky plodiny (CSV)",
-            "icon": "🌾",
-            "description": "Analýza výnosov podľa plodiny z CSV"
         },
         "parcel": {
             "title": "🏞️ Štatistiky parcely",
@@ -129,7 +124,7 @@ def main():
     
     # Inicializácia aktívnej karty
     if 'active_tab' not in st.session_state:
-        st.session_state.active_tab = "enterprise"
+        st.session_state.active_tab = "enterprise_db_prediction"
     
     # Radiobuttony pre výber sekcie
     st.sidebar.markdown("## 📋 Navigácia")
@@ -175,8 +170,10 @@ def main():
     st.markdown('<h1 class="main-header">🌾 Analýza výnosov DPB</h1>', unsafe_allow_html=True)
     
     # Zobrazenie obsahu podľa vybranej karty
-    if st.session_state.active_tab == "enterprise":
-        show_enterprise_statistics(df, st.session_state.selected_crop)
+    if st.session_state.active_tab == "enterprise_db_prediction":
+        # Import the new enterprise statistics function
+        from modules.enterprise_stats_db_prediction import show_enterprise_stats_db_prediction
+        show_enterprise_stats_db_prediction()
         
     elif st.session_state.active_tab == "crop_db":
         # Filter pre plodinu na karte plodiny z databázy
@@ -220,29 +217,6 @@ def main():
         
         # Zatvorenie databázového spojenia
         engine.dispose()
-        
-    elif st.session_state.active_tab == "crop":
-        # Filter pre plodinu na karte plodiny z CSV
-        st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-        st.subheader("🔍 Filtre")
-        
-        # Nastavenie indexu pre "Pšenica letná ozimná"
-        default_index = 0
-        if "Pšenica letná ozimná" in available_crops:
-            default_index = available_crops.index("Pšenica letná ozimná")
-        
-        selected_crop = st.selectbox(
-            "Vyberte plodinu:", 
-            available_crops, 
-            index=default_index,
-            key="crop_csv_selector"
-        )
-        st.session_state.selected_crop = selected_crop
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Volanie pôvodnej funkcie pre CSV štatistiky
-        from modules.crop_stats import show_crop_statistics
-        show_crop_statistics(df, selected_crop)
         
     elif st.session_state.active_tab == "parcel":
         # Filter pre parcelu na karte parcely
@@ -304,6 +278,7 @@ def main():
         
     elif st.session_state.active_tab == "soil_samples":
         # Call the soil samples map function
+        from soil_samples_map_app import soil_samples_map
         soil_samples_map()
         
     else:
