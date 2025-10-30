@@ -1,11 +1,15 @@
 {
-  "build": {
-    "builder": "nixpacks"
-  },
-  "deploy": {
-    "startCommand": "streamlit run yield_analysis_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 300,
-    "restartPolicyType": "on_failure"
-  }
+    "$schema": "https://railway.app/railway.schema.json",
+    "build": {
+        "builder": "NIXPACKS",
+        "buildCommand": "pip install -r requirements.txt"
+    },
+    "deploy": {
+        "startCommand": "streamlit run yield_analysis_app_exata.py --server.port $PORT",
+        "healthcheckPath": "/",
+        "healthcheckTimeout": 100
+    },
+    "env": {
+        "PYTHON_VERSION": "3.11"
+    }
 }

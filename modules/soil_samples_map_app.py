@@ -7,12 +7,17 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 # Import database connection parameters
-from modules.data_loader import (
-    DB_USER_DESTINATION, 
-    DB_PASSWORD_DESTINATION, 
-    DB_HOST_DESTINATION, 
-    DB_NAME_DESTINATION
-)
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Database connection parameters
+DB_USER_DESTINATION = os.getenv('DB_USER_DESTINATION', 'db_admin')
+DB_PASSWORD_DESTINATION = os.getenv('DB_PASSWORD_DESTINATION', '')
+DB_HOST_DESTINATION = os.getenv('DB_HOST_DESTINATION', 'localhost')
+DB_NAME_DESTINATION = os.getenv('DB_NAME_DESTINATION', 'postgres')
 
 # Add custom CSS for better map layout
 st.markdown("""

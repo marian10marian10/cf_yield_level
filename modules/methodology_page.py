@@ -81,6 +81,7 @@ def show_methodology_page():
     # Load and display the first image
     image_path1 = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), 
+        'media', 
         'skeagis_csv.png'
     )
     
@@ -102,6 +103,7 @@ def show_methodology_page():
     # Load and display the second image (database table preview)
     image_path2 = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), 
+        'media', 
         'db_image.png'
     )
     
@@ -123,6 +125,7 @@ def show_methodology_page():
     # Load and display the third image (database structure)
     image_path3 = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), 
+        'media', 
         'db_structure.png'
     )
     

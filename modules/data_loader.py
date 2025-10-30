@@ -5,12 +5,16 @@ import re
 import os
 import psycopg2
 from sqlalchemy import create_engine
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Database connection parameters
-DB_USER_DESTINATION = 'db_admin'
-DB_PASSWORD_DESTINATION = "Ybm=Zjk#sTf3#^]ybD<k"
-DB_HOST_DESTINATION = 'team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com'
-DB_NAME_DESTINATION = 'postgres'
+DB_USER_DESTINATION = os.getenv('DB_USER_DESTINATION', 'db_admin')
+DB_PASSWORD_DESTINATION = os.getenv('DB_PASSWORD_DESTINATION', '')
+DB_HOST_DESTINATION = os.getenv('DB_HOST_DESTINATION', 'localhost')
+DB_NAME_DESTINATION = os.getenv('DB_NAME_DESTINATION', 'postgres')
 
 @st.cache_data
 def load_data():
