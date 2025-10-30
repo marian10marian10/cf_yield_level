@@ -12,7 +12,7 @@ from modules.crop_stats_db import show_crop_statistics_from_db
 from modules.analyses import show_planning
 
 # Import the soil samples map function
-from soil_samples_map_app import soil_samples_map, about_page
+from modules.soil_samples_map_app import soil_samples_map, about_page
 
 # Konfigurácia stránky
 st.set_page_config(
@@ -89,7 +89,7 @@ def main():
             "description": "Štatistiky podniku pre sezónu 25/26"
         },
         "crop_db": {
-            "title": "🌱 Štatistiky plodiny (DB)",
+            "title": "🌱 Štatistiky plodiny",
             "icon": "🌱",
             "description": "Detailná analýza výnosov plodín z databázy"
         },
@@ -265,7 +265,7 @@ def main():
         
     elif st.session_state.active_tab == "soil_samples":
         # Call the soil samples map function
-        from soil_samples_map_app import soil_samples_map
+        from modules.soil_samples_map_app import soil_samples_map
         soil_samples_map()
         
     elif st.session_state.active_tab == "methodology":
