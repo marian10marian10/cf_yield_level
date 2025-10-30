@@ -861,13 +861,6 @@ def about_page():
     ''')
 
 def main():
-    # Set page configuration
-    st.set_page_config(
-        page_title="Priestorová Analýza Pôdnych Vzoriek",
-        page_icon="🌍",
-        layout="wide"
-    )
-    
     # Create sidebar navigation
     page = st.sidebar.radio(
         "Navigácia", 

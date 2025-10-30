@@ -1,4 +1,11 @@
 import streamlit as st
+st.set_page_config(
+    page_title="Analýza výnosov DPB",
+    page_icon="🌾",
+    layout="wide",
+    initial_sidebar_state="expanded"  # Zmenené na expanded pre bočné menu
+)
+
 import pandas as pd
 import numpy as np
 import warnings
@@ -14,69 +21,61 @@ from modules.analyses import show_planning
 # Import the soil samples map function
 from modules.soil_samples_map_app import soil_samples_map, about_page
 
-# Konfigurácia stránky
-st.set_page_config(
-    page_title="Analýza výnosov DPB",
-    page_icon="🌾",
-    layout="wide",
-    initial_sidebar_state="expanded"  # Zmenené na expanded pre bočné menu
-)
-
-# CSS pre lepší vzhľad
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
-    }
-    .crop-selector {
-        background-color: #e8f4fd;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 1rem 0;
-    }
-    .filter-container {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    /* Sidebar styling */
-    .css-1d391kg {
-        padding-top: 3rem;
-    }
-    [data-testid="stSidebar"] {
-        background-image: linear-gradient(180deg, #e8f4fd 0%, #ffffff 100%);
-    }
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        font-size: 1rem;
-    }
-    /* Sidebar radio button styling */
-    [data-testid="stSidebar"] [data-testid="stRadio"] {
-        margin-top: 1rem;
-    }
-    [data-testid="stSidebar"] [data-testid="stRadio"] label {
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        transition: all 0.2s ease;
-        margin-bottom: 0.5rem;
-    }
-    [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-        background-color: #e8f4fd;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 def main():
+    # CSS pre lepší vzhľad
+    st.markdown("""
+    <style>
+        .main-header {
+            font-size: 2.5rem;
+            color: #1f77b4;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background-color: #f0f2f6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid #1f77b4;
+        }
+        .crop-selector {
+            background-color: #e8f4fd;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        .filter-container {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        /* Sidebar styling */
+        .css-1d391kg {
+            padding-top: 3rem;
+        }
+        [data-testid="stSidebar"] {
+            background-image: linear-gradient(180deg, #e8f4fd 0%, #ffffff 100%);
+        }
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+            font-size: 1rem;
+        }
+        /* Sidebar radio button styling */
+        [data-testid="stSidebar"] [data-testid="stRadio"] {
+            margin-top: 1rem;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            margin-bottom: 0.5rem;
+        }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+            background-color: #e8f4fd;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Bočné navigačné menu
     st.sidebar.title("🌾 Analýza výnosov DPB")
     st.sidebar.markdown("---")
