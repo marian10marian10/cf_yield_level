@@ -10,7 +10,6 @@ from modules.enterprise_stats import show_enterprise_statistics
 from modules.parcel_stats import show_parcel_statistics
 from modules.crop_stats_db import show_crop_statistics_from_db
 from modules.analyses import show_planning
-from modules.simple_maps import show_maps
 
 # Import the soil samples map function
 from soil_samples_map_app import soil_samples_map, about_page
@@ -103,11 +102,6 @@ def main():
             "title": "📅 Plánovanie",
             "icon": "📅",
             "description": "Predikcia výnosov pre sezónu 25_26"
-        },
-        "maps": {
-            "title": "🗺️ Mapy",
-            "icon": "🗺️",
-            "description": "Interaktívne mapy výnosov"
         },
         "soil_samples": {
             "title": "🌍 Mapa Pôdnych Vzoriek",
@@ -268,9 +262,6 @@ def main():
         
     elif st.session_state.active_tab == "planning":
         show_planning(df)
-        
-    elif st.session_state.active_tab == "maps":
-        show_maps(df)
         
     elif st.session_state.active_tab == "soil_samples":
         # Call the soil samples map function
