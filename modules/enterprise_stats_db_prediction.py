@@ -83,13 +83,13 @@ def show_enterprise_stats_db_prediction():
     st.plotly_chart(fig_nutrient_demand, use_container_width=True)
     
     # Crop analysis
-    # Aggregate data by crop with safe numeric conversion
+    # Aggregate data by crop with safe numeric conversion and rounding
     crop_stats = df.groupby('crops').agg({
         'parcel_id': 'count',
         'total_demand_n': 'sum',
         'total_demand_p': 'sum',
         'total_demand_k': 'sum',
-        '25_26_yield_predictions': lambda x: safe_convert_to_numeric(x).mean()
+        '25_26_yield_predictions': lambda x: round(safe_convert_to_numeric(x).mean(), 2)
     }).reset_index()
     
     crop_stats.columns = ['Plodina', 'Počet parciel', 'Celková potreba N', 'Celková potreba P', 'Celková potreba K', 'Priemerná predikcia výnosov']

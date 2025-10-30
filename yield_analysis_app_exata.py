@@ -119,6 +119,11 @@ def main():
             "title": "🌍 Mapa Pôdnych Vzoriek",
             "icon": "🌍",
             "description": "Priestorová analýza pôdnych vzoriek"
+        },
+        "methodology": {
+            "title": "📘 Metodika",
+            "icon": "📘",
+            "description": "Architektúra dát a prístup k analýze"
         }
     }
     
@@ -280,6 +285,11 @@ def main():
         # Call the soil samples map function
         from soil_samples_map_app import soil_samples_map
         soil_samples_map()
+        
+    elif st.session_state.active_tab == "methodology":
+        # Call the methodology page function
+        from modules.methodology_page import show_methodology_page
+        show_methodology_page()
         
     else:
         st.info("Vyberte kartu z menu vyššie.")
