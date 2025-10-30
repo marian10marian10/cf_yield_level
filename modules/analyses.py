@@ -30,7 +30,7 @@ def get_planning_data(df):
         # Komplexnejší SQL dopyt pre načítanie dát vrátane potreby N
         planning_query = """
         SELECT localname, company, crops, "25_26_yield_predictions", 
-               total_demand_n, total_demand_n_80, total_demand_p, total_demand_k
+               total_demand_n, total_demand_n_90, total_demand_p, total_demand_k
         FROM yield_level.mv_25_26_prediction_demand
         """
         
@@ -48,7 +48,7 @@ def get_planning_data(df):
         numeric_columns = [
             '25_26_yield_predictions', 
             'total_demand_n', 
-            'total_demand_n_80', 
+            'total_demand_n_90', 
             'total_demand_p', 
             'total_demand_k'
         ]
@@ -183,7 +183,7 @@ def show_planning(df):
         'crops': 'Plodina',
         '25_26_yield_predictions': 'Predikovaný výnos (t/ha)',
         'total_demand_n': 'Potreba N',
-        'total_demand_n_80': 'Potreba N (80%)',
+        'total_demand_n_90': 'Potreba N (90%)',
         'total_demand_p': 'Potreba P',
         'total_demand_k': 'Potreba K'
     }

@@ -918,6 +918,151 @@ def create_all_parcels_map(df):
         st.error(f"Chyba pri vytváraní datovej mapy všetkých parciel: {e}")
         return None
 
+# Přidání statických metod mimo funkci
+def calculate_correlated_p_demand(source_data, details):
+    """Calculate correlated P demand based on crop and soil category"""
+    crop = source_data['crops']
+    p_category = source_data['eagri_p_category']
+    base_demand = float(details['25_26_yield_prediction'] or 0) * float(details['uptake_p'] or 0)
+
+    # Specific crops for detailed categorization
+    wheat_like_crops = ['Pšenica letná ozimná', 'Jačmeň jarný', 'Kapusta repková pravá - ozimná', 'Pšenica tvrdá', 'Slnečnica ročná']
+    corn_like_crops = ['Kukurica', 'Repa cukrová']
+
+    # Default calculation
+    if p_category == 0:
+        return round(base_demand * 2.2915, 2)
+
+    # Wheat-like crops
+    if crop in wheat_like_crops:
+        if p_category == 5:
+            return 105
+        elif p_category == 4:
+            return 85
+        elif p_category == 3:
+            return 70
+        elif p_category in [1, 2]:
+            return 0
+
+    # Corn-like crops
+    if crop in corn_like_crops:
+        if p_category == 5:
+            return 150
+        elif p_category == 4:
+            return 120
+        elif p_category == 3:
+            return 100
+        elif p_category in [1, 2]:
+            return 0
+
+    return 0
+
+def calculate_correlated_k_demand(source_data, details):
+    """Calculate correlated K demand based on crop and soil category"""
+    crop = source_data['crops']
+    k_category = source_data['eagri_k_category']
+    base_demand = float(details['25_26_yield_prediction'] or 0) * float(details['uptake_k'] or 0)
+
+    # Specific crops for detailed categorization
+    wheat_like_crops = ['Pšenica letná ozimná', 'Jačmeň jarný', 'Kapusta repková pravá - ozimná', 'Pšenica tvrdá', 'Slnečnica ročná', 'Kukurica']
+    sugar_beet_crops = ['Repa cukrová']
+
+    # Default calculation
+    if k_category == 0:
+        return round(base_demand * 1.2, 2)
+
+    # Wheat-like crops
+    if crop in wheat_like_crops:
+        if k_category == 5:
+            return 180
+        elif k_category == 4:
+            return 140
+        elif k_category == 3:
+            return 120
+        elif k_category in [1, 2]:
+            return 0
+
+    # Sugar beet crops
+    if crop in sugar_beet_crops:
+        if k_category == 5:
+            return 260
+        elif k_category == 4:
+            return 200
+        elif k_category == 3:
+            return 170
+        elif k_category in [1, 2]:
+            return 0
+
+    return 0
+
+def show_nutrient_demand_explanation():
+    """Zobraziť detailné vysvetlenie výpočtu dávok živín"""
+    st.markdown("## 🧮 Metodika výpočtu dávok živín")
+    
+    # Tabuľka pre fosfor (P2O5)
+    st.markdown("### 🟢 Výpočet dávky fosforu (P2O5)")
+    
+    p_demand_data = [
+        ["Kategória 0", "Základná potreba * 2.2915", "Ak nie je špecifická kategória"],
+        ["Pšenica, Jačmeň, Kapusta, Pšenica tvrdá, Slnečnica", "", ""],
+        ["Kategória 5 (veľmi nízky obsah)", "105 kg/ha", "Najvyššia dávka"],
+        ["Kategória 4 (nízky obsah)", "85 kg/ha", "Stredne vysoká dávka"],
+        ["Kategória 3 (stredný obsah)", "70 kg/ha", "Stredná dávka"],
+        ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"],
+        ["Kukurica, Repa cukrová", "", ""],
+        ["Kategória 5 (veľmi nízky obsah)", "150 kg/ha", "Najvyššia dávka"],
+        ["Kategória 4 (nízky obsah)", "120 kg/ha", "Stredne vysoká dávka"],
+        ["Kategória 3 (stredný obsah)", "100 kg/ha", "Stredná dávka"],
+        ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+    ]
+    
+    p_demand_df = pd.DataFrame(p_demand_data, columns=["Kategória/Plodina", "Dávka P2O5", "Poznámka"])
+    st.dataframe(p_demand_df, use_container_width=True)
+    
+    # Tabuľka pre draslík (K2O)
+    st.markdown("### 🔵 Výpočet dávky draslíka (K2O)")
+    
+    k_demand_data = [
+        ["Kategória 0", "Základná potreba * 1.2", "Ak nie je špecifická kategória"],
+        ["Pšenica, Jačmeň, Kapusta, Pšenica tvrdá, Slnečnica, Kukurica", "", ""],
+        ["Kategória 5 (veľmi nízky obsah)", "180 kg/ha", "Najvyššia dávka"],
+        ["Kategória 4 (nízky obsah)", "140 kg/ha", "Stredne vysoká dávka"],
+        ["Kategória 3 (stredný obsah)", "120 kg/ha", "Stredná dávka"],
+        ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"],
+        ["Repa cukrová", "", ""],
+        ["Kategória 5 (veľmi nízky obsah)", "260 kg/ha", "Najvyššia dávka"],
+        ["Kategória 4 (nízky obsah)", "200 kg/ha", "Stredne vysoká dávka"],
+        ["Kategória 3 (stredný obsah)", "170 kg/ha", "Stredná dávka"],
+        ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+    ]
+    
+    k_demand_df = pd.DataFrame(k_demand_data, columns=["Kategória/Plodina", "Dávka K2O", "Poznámka"])
+    st.dataframe(k_demand_df, use_container_width=True)
+    
+    # Vysvetlenie kategórií
+    st.markdown("""
+    ### 📊 Kategorizácia obsahu živín v pôde
+    
+    #### Fosfor (P2O5):
+    - **Kategória 5**: < 51 mg/kg (veľmi nízky obsah)
+    - **Kategória 4**: 51-81 mg/kg (nízky obsah)
+    - **Kategória 3**: 81-116 mg/kg (stredný obsah)
+    - **Kategória 2**: 116-185 mg/kg (vyšší obsah)
+    - **Kategória 1**: > 185 mg/kg (vysoký obsah)
+    
+    #### Draslík (K2O):
+    - **Kategória 5**: < 101 mg/kg (veľmi nízky obsah)
+    - **Kategória 4**: 101-161 mg/kg (nízky obsah)
+    - **Kategória 3**: 161-276 mg/kg (stredný obsah)
+    - **Kategória 2**: 276-380 mg/kg (vyšší obsah)
+    - **Kategória 1**: > 380 mg/kg (vysoký obsah)
+    
+    ### 🌱 Princíp výpočtu
+    - Dávka živín závisí od kategórie obsahu živín v pôde
+    - Čím nižšia kategória, tým vyššia potreba hnojenia
+    - Pre kategórie 1-2 (vysoký obsah) sa nepridáva žiadna dávka
+    """)
+
 def show_parcel_statistics(df, selected_parcel):
     """Zobrazenie štatistík parcely z materialized view"""
     st.header("🏞️ Štatistiky parcely")
@@ -1060,88 +1205,586 @@ def show_parcel_statistics(df, selected_parcel):
         
         # Detailná história parcely
         st.subheader("📈 História parcely")
+        
+        # Príprava dát pre tabuľku
+        history_df = parcel_data.sort_values('season_id', ascending=False).drop(columns=['parcel_season_id', 'parcel_id', 'geometry'])
+        
+        # Štýlovanie tabuľky so zvýraznením stĺpca sk_yield_ha
+        def highlight_yield(s):
+            """Zvýraznenie stĺpca sk_yield_ha"""
+            return ['background-color: lightyellow' if col == 'sk_yield_ha' else '' for col in s.index]
+        
+        # Zobrazenie tabuľky so štýlovaním
         st.dataframe(
-            parcel_data.sort_values('season_id', ascending=False).drop(columns=['parcel_season_id', 'parcel_id', 'geometry']),
+            history_df.style.apply(highlight_yield, axis=1),
             use_container_width=True
         )
         
-        # Histogram výnosov
-        # Removed distribution of yields section
+        # Pridanie sekcie pre plán na sezónu 2025/2026
+        st.markdown("---")
+        st.subheader("🌱 Plán na sezónu 2025/2026")
         
-        # Mapa parcely
-        st.subheader("🗺️ Lokalizácia parcely")
-        
-        # Kontrola dostupnosti geometrie
-        if 'geometry' in parcel_data.columns and not parcel_data['geometry'].isna().all():
-            # Použitie prvej dostupnej geometrie
-            geometry_str = parcel_data['geometry'].dropna().iloc[0]
-            
+        # Bezpečná konverzia na float
+        def safe_float_convert(value):
             try:
-                # Konverzia geometrie
-                from shapely import wkt
-                import geopandas as gpd
-                import folium
-                from shapely.wkb import loads as wkb_loads
-                import binascii
+                return float(value)
+            except (ValueError, TypeError):
+                return 0.0
+        
+        # Načítanie plánovacích dát pre konkrétnu parcelu
+        prediction_query = text("""
+        SELECT crops, "25_26_yield_predictions", 
+               total_demand_n_90, total_demand_p, total_demand_k
+        FROM yield_level.mv_25_26_prediction_demand
+        WHERE localname = :parcel_name
+        """)
+        
+        with engine.connect() as connection:
+            prediction_data = pd.read_sql(
+                prediction_query, 
+                connection, 
+                params={'parcel_name': selected_parcel}
+            )
+        
+        if not prediction_data.empty:
+            # Prvý riadok (ak je viac záznamov)
+            prediction = prediction_data.iloc[0]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("Plodina", prediction['crops'])
                 
-                # Pokus o konverziu WKB
-                try:
-                    # Odstránenie medzier a konverzia na bytes
-                    geometry_str = geometry_str.replace(' ', '')
-                    parcel_geometry = wkb_loads(binascii.unhexlify(geometry_str))
-                except Exception as wkb_err:
-                    # Ak WKB zlyhá, skúsiť WKT
-                    try:
-                        parcel_geometry = wkt.loads(geometry_str)
-                    except Exception as wkt_err:
-                        raise ValueError(f"Nepodarilo sa spracovať geometriu: WKB chyba: {wkb_err}, WKT chyba: {wkt_err}")
+                # Bezpečná konverzia predikovaného výnosu
+                predicted_yield = safe_float_convert(prediction['25_26_yield_predictions'])
+                st.metric("Predikovaný výnos", f"{predicted_yield:.2f} t/ha")
+            
+            with col2:
+                # Stĺpcový graf pre potreby živín
+                import plotly.graph_objects as go
                 
-                # Vytvorenie GeoDataFrame so správnym súradnicovým systémom
-                gdf = gpd.GeoDataFrame([{'name': selected_parcel, 'geometry': parcel_geometry}])
-                gdf.set_crs(epsg=5514, inplace=True)  # Nastavenie pôvodného súradnicového systému
+                nutrients = ['N (90%)', 'P2O5', 'K2O']
+                demands = [
+                    safe_float_convert(prediction['total_demand_n_90']), 
+                    safe_float_convert(prediction['total_demand_p']), 
+                    safe_float_convert(prediction['total_demand_k'])
+                ]
                 
-                # Transformácia do WGS84 (EPSG:4326) pre mapu
-                gdf_wgs84 = gdf.to_crs(epsg=4326)
+                # Formátovanie hodnôt na 2 desatinné miesta
+                formatted_demands = [f"{val:.2f}" for val in demands]
                 
-                # Výpočet stredu a bounds pre mapu
-                bounds = gdf_wgs84.total_bounds
-                center_lon = (bounds[0] + bounds[2]) / 2
-                center_lat = (bounds[1] + bounds[3]) / 2
+                fig = go.Figure(data=[
+                    go.Bar(
+                        x=nutrients, 
+                        y=demands, 
+                        marker_color=['green', 'red', 'blue'],
+                        text=formatted_demands,  # Pridanie textu
+                        textposition='outside',  # Umiestnenie textu nad stĺpcom
+                        textfont=dict(size=12)  # Nastavenie veľkosti písma
+                    )
+                ])
                 
-                # Vytvorenie mapy
-                m = folium.Map(
-                    location=[center_lat, center_lon],
-                    zoom_start=14,
-                    tiles='CartoDB positron'
+                fig.update_layout(
+                    title='Potreba živín pre sezónu 2025/2026',
+                    xaxis_title='Živina',
+                    yaxis_title='Potreba',
+                    height=300,
+                    yaxis=dict(range=[0, max(demands) * 1.2])  # Pridanie priestoru pre text
                 )
                 
-                # Pridanie parcely
-                folium.GeoJson(
-                    gdf_wgs84,
-                    style_function=lambda x: {
-                        'fillColor': '#3498db',
-                        'color': '#000000',
-                        'weight': 2,
-                        'fillOpacity': 0.5
-                    }
-                ).add_to(m)
-                
-                # Zobrazenie mapy
-                folium_static = m._repr_html_()
-                st.components.v1.html(folium_static, height=500)
+                st.plotly_chart(fig, use_container_width=True)
             
-            except Exception as e:
-                st.warning(f"Nepodarilo sa zobraziť mapu parcely: {e}")
-                # Pridať debug informácie
-                st.text(f"Pôvodná geometria: {geometry_str}")
-                st.text(f"Typ geometrie: {type(geometry_str)}")
-                st.text(f"Dĺžka geometrie: {len(geometry_str)}")
+            # Nová sekcia Výpočet dávky
+            st.markdown("---")
+            st.subheader("🧮 Výpočet dávky živín")
+            
+            # Načítanie zdrojových dát pre výpočet
+            source_query = text("""
+            SELECT 
+                crops,
+                "25_26_yield_predictions",
+                total_demand_n,
+                total_demand_p,
+                total_demand_k,
+                amount_of_p,
+                amount_of_k,
+                eagri_p_category,
+                eagri_k_category
+            FROM yield_level.mv_25_26_prediction_demand
+            WHERE localname = :parcel_name
+            """)
+            
+            with engine.connect() as connection:
+                source_data = pd.read_sql(
+                    source_query, 
+                    connection, 
+                    params={'parcel_name': selected_parcel}
+                )
+            
+            if not source_data.empty:
+                # Prezentácia zdrojových dát
+                st.markdown("### 📊 Zdrojové dáta pre výpočet")
+                
+                # Formátovanie stĺpcov
+                source_data_display = source_data.copy()
+                columns_to_round = [
+                    '25_26_yield_predictions', 
+                    'total_demand_n', 'total_demand_p', 'total_demand_k',
+                    'amount_of_p', 'amount_of_k'
+                ]
+                for col in columns_to_round:
+                    source_data_display[col] = pd.to_numeric(source_data_display[col], errors='coerce').round(2)
+                
+                st.dataframe(source_data_display, use_container_width=True)
+                
+                # Načítanie detailných informácií o plodine
+                crop_details_query = text("""
+                SELECT 
+                    lb.crop_id, 
+                    lb.internal_crop_label, 
+                    lb.uptake_n, 
+                    lb.uptake_p, 
+                    lb.uptake_k,
+                    pred.ppa_crop_id,
+                    pred."25_26_yield_prediction"
+                FROM yield_level.mv_25_26_prediction pred
+                JOIN lookups.lookup_balance lb ON pred.ppa_crop_id = lb.ppa_crop_id
+                WHERE pred.localname = :parcel_name
+                """)
+                
+                with engine.connect() as connection:
+                    crop_details = pd.read_sql(
+                        crop_details_query, 
+                        connection, 
+                        params={'parcel_name': selected_parcel}
+                    )
+                
+                # Vysvetlenie výpočtu
+                st.markdown("### 🔢 Detailný postup výpočtu")
+                
+                if not crop_details.empty:
+                    # Prvý riadok (ak je viac záznamov)
+                    details = crop_details.iloc[0]
+                    
+                    # Príprava HTML tabuľky pre lepšiu čitateľnosť
+                    def safe_format(value, format_spec='.2f', default='N/A'):
+                        """Safely format values, handling None and conversion errors"""
+                        try:
+                            if value is None:
+                                return default
+                            return f"{float(value):{format_spec}}"
+                        except (ValueError, TypeError):
+                            return default
+                    
+                    st.markdown("#### 📊 Výpočet potreby živín")
+                    
+                    # Vytvorenie troch stĺpcov pre výpočet živín
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("**1. Predikovaný výnos:**")
+                        st.markdown(f"**{safe_format(details['25_26_yield_prediction'])} t/ha**")
+                    
+                    with col2:
+                        st.markdown("**2. Špecifická spotreba živín na 1 t výnosu:**")
+                        st.markdown(f"""
+                        | Živina | Spotreba (kg/t) |
+                        |--------|-----------------|
+                        | Dusík (N) | {safe_format(details['uptake_n'])} |
+                        | Fosfor (P) | {safe_format(details['uptake_p'])} |
+                        | Draslík (K) | {safe_format(details['uptake_k'])} |
+                        """)
+                    
+                    with col3:
+                        st.markdown("**3. Výpočet celkovej potreby živín:**")
+                        st.markdown(f"""
+                        - **Dusík (N):** {safe_format(details['25_26_yield_prediction'])} t/ha * {safe_format(details['uptake_n'])} kg/t = {safe_format(float(details['25_26_yield_prediction'] or 0) * float(details['uptake_n'] or 0))} kg N
+                        - **Fosfor (P2O5):** {safe_format(details['25_26_yield_prediction'])} t/ha * {safe_format(details['uptake_p'])} kg/t = {safe_format(float(details['25_26_yield_prediction'] or 0) * float(details['uptake_p'] or 0))} kg P2O5
+                        - **Draslík (K2O):** {safe_format(details['25_26_yield_prediction'])} t/ha * {safe_format(details['uptake_k'])} kg/t = {safe_format(float(details['25_26_yield_prediction'] or 0) * float(details['uptake_k'] or 0))} kg K2O
+                        """)
+                    
+                    # Pridanie štvrtého stĺpca pre korelovanú dávku
+                    st.markdown("**4. Výpočet korelovanej dávky živín:**")
+                    col4, col5 = st.columns(2)
+                    
+                    with col4:
+                        st.markdown(f"""
+                        - **Dusík (N):** {safe_format(float(details['25_26_yield_prediction'] or 0) * float(details['uptake_n'] or 0) * 0.9)} kg N (90% varianta)
+                        - **Fosfor (P2O5):** {calculate_correlated_p_demand(source_data.iloc[0], details)} kg P2O5
+                        - **Draslík (K2O):** {calculate_correlated_k_demand(source_data.iloc[0], details)} kg K2O
+                        """)
+                
+                # Pridanie tabuľiek s vysvetlením vedľa seba
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("### 🟢 Výpočet dávky fosforu (P2O5)")
+                    p_demand_df, k_demand_df = get_nutrient_demand_tables(prediction['crops'])
+                    st.dataframe(p_demand_df, use_container_width=True)
+                
+                with col2:
+                    st.markdown("### 🔵 Výpočet dávky draslíka (K2O)")
+                    st.dataframe(k_demand_df, use_container_width=True)
+                
+                # Kategorizácia živín
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("""
+                    ### 📊 Kategorizácia obsahu živín v pôde
+                    
+                    #### Fosfor (P2O5):
+                    - **Kategória 5**: < 51 mg/kg (veľmi nízky obsah)
+                    - **Kategória 4**: 51-81 mg/kg (nízky obsah)
+                    - **Kategória 3**: 81-116 mg/kg (stredný obsah)
+                    - **Kategória 2**: 116-185 mg/kg (vyšší obsah)
+                    - **Kategória 1**: > 185 mg/kg (vysoký obsah)
+                    """)
+                
+                with col2:
+                    st.markdown("""
+                    ### 📊 Kategorizácia obsahu živín v pôde
+                    
+                    #### Draslík (K2O):
+                    - **Kategória 5**: < 101 mg/kg (veľmi nízky obsah)
+                    - **Kategória 4**: 101-161 mg/kg (nízky obsah)
+                    - **Kategória 3**: 161-276 mg/kg (stredný obsah)
+                    - **Kategória 2**: 276-380 mg/kg (vyšší obsah)
+                    - **Kategória 1**: > 380 mg/kg (vysoký obsah)
+                    """)
+                
+                # Princíp výpočtu
+                st.markdown("""
+                ### 🌱 Princíp výpočtu
+                - Dávka živín závisí od kategórie obsahu živín v pôde
+                - Čím nižšia kategória, tým vyššia potreba hnojenia
+                - Pre kategórie 1-2 (vysoký obsah) sa nepridáva žiadna dávka
+                """)
+                
+                # Pridanie informácií o obsahu živín v pôde
+                st.markdown("#### 🌈 Kategorizácia pôdy")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Obsah živín v pôde:**")
+                    st.markdown(f"""
+                    - **Fosfor (P):** {safe_format(source_data.iloc[0]['amount_of_p'], default='Neurčené')} mg/kg 
+                      - **Kategória:** {safe_format(source_data.iloc[0]['eagri_p_category'], default='Neurčená')}
+                    """)
+                
+                with col2:
+                    st.markdown("**Obsah živín v pôde:**")
+                    st.markdown(f"""
+                    - **Draslík (K):** {safe_format(source_data.iloc[0]['amount_of_k'], default='Neurčené')} mg/kg
+                      - **Kategória:** {safe_format(source_data.iloc[0]['eagri_k_category'], default='Neurčená')}
+                    """)
+                
+                # Pridanie mapy pôdnych vzoriek pre konkrétnu parcelu
+                st.markdown("#### 🗺️ Mapa Pôdnych Vzoriek")
+                
+                # Dotaz na načítanie pôdnych vzoriek pre konkrétnu parcelu
+                soil_samples_query = text("""
+                SELECT 
+                    ss.id, 
+                    ss.p, 
+                    ss.k, 
+                    ss.ph, 
+                    ST_AsText(ST_Transform(ss.geom, 4326)) AS geometry_text,
+                    lp.localname
+                FROM yield_level.soil_samples_raw ss
+                JOIN yield_level.cf_parcel_season ps ON ST_Intersects(
+                    ST_Transform(ss.geom, 5514), 
+                    ps.geometry
+                )
+                JOIN lookups.lookup_sklpis_parcels lp ON ps.parcel_id = lp.parcel_id
+                WHERE lp.localname = :parcel_name
+                """)
+                
+                with engine.connect() as connection:
+                    soil_samples_df = pd.read_sql(
+                        soil_samples_query, 
+                        connection, 
+                        params={'parcel_name': selected_parcel}
+                    )
+                
+                # Ak nie sú žiadne vzorky, pridaj upozornenie
+                if soil_samples_df.empty:
+                    st.warning(f"Pre parcelu {selected_parcel} neboli nájdené žiadne pôdne vzorky.")
+                    soil_samples_map_section = False
+                else:
+                    soil_samples_map_section = True
+                
+                    # Konverzia na GeoDataFrame
+                    import geopandas as gpd
+                    gdf_points = gpd.GeoDataFrame(
+                        soil_samples_df, 
+                        geometry=gpd.GeoSeries.from_wkt(soil_samples_df['geometry_text'], crs='EPSG:4326')
+                    )
+                    
+                    # Dotaz na geometriu parcely
+                    parcel_query = text("""
+                    SELECT 
+                        ST_AsText(ST_Transform(geometry, 4326)) AS geometry_text
+                    FROM yield_level.cf_parcel_season ps
+                    JOIN lookups.lookup_sklpis_parcels lp ON ps.parcel_id = lp.parcel_id
+                    WHERE lp.localname = :parcel_name
+                    """)
+                    
+                    with engine.connect() as connection:
+                        parcel_geom = connection.execute(parcel_query, {'parcel_name': selected_parcel}).fetchone()
+                    
+                    # Ak nie je geometria parcely, preskočiť
+                    if not parcel_geom:
+                        st.warning(f"Nepodarilo sa načítať geometriu parcely {selected_parcel}")
+                        soil_samples_map_section = False
+                    else:
+                        # Konverzia geometrie parcely
+                        gdf_parcels = gpd.GeoDataFrame(
+                            geometry=gpd.GeoSeries.from_wkt([parcel_geom[0]], crs='EPSG:4326')
+                        )
+                
+                # Pridanie informácií o obsahu živín v pôde
+                st.markdown("#### 🔬 Kategorizácia pôdy")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Obsah živín v pôde:**")
+                    st.markdown(f"""
+                    - **Fosfor (P):** {safe_format(source_data.iloc[0]['amount_of_p'], default='Neurčené')} mg/kg 
+                      - **Kategória:** {safe_format(source_data.iloc[0]['eagri_p_category'], default='Neurčená')}
+                    """)
+                
+                with col2:
+                    st.markdown("**Obsah živín v pôde:**")
+                    st.markdown(f"""
+                    - **Draslík (K):** {safe_format(source_data.iloc[0]['amount_of_k'], default='Neurčené')} mg/kg
+                      - **Kategória:** {safe_format(source_data.iloc[0]['eagri_k_category'], default='Neurčená')}
+                    """)
+                
+                # Pridanie mapy pôdnych vzoriek pre konkrétnu parcelu
+                if soil_samples_map_section:
+                    # Výber parametra pre farbu bodov
+                    selected_color_param = st.selectbox(
+                        'Vyberte parameter pre farbu bodov:',
+                        ['Fosfor (P)', 'Draslík (K)']
+                    )
+                    
+                    # Definovanie kategorizačnej funkcie pre fosfor a draslík
+                    def categorize_nutrient(nutrient, value):
+                        if nutrient == 'Fosfor (P)':
+                            if value < 51:
+                                return 5  # Veľmi nízky obsah
+                            elif 51 <= value < 81:
+                                return 4  # Nízky obsah
+                            elif 81 <= value < 116:
+                                return 3  # Stredný obsah
+                            elif 116 <= value < 185:
+                                return 2  # Vyšší obsah
+                            else:  # > 185
+                                return 1  # Vysoký obsah
+                        elif nutrient == 'Draslík (K)':
+                            if value < 101:
+                                return 5  # Veľmi nízky obsah
+                            elif 101 <= value < 161:
+                                return 4  # Nízky obsah
+                            elif 161 <= value < 276:
+                                return 3  # Stredný obsah
+                            elif 276 <= value < 380:
+                                return 2  # Vyšší obsah
+                            else:  # > 380
+                                return 1  # Vysoký obsah
+                    
+                    # Definovanie farebnej mapy
+                    color_map = {
+                        5: '#FF0000',    # Veľmi nízky - Red
+                        4: '#FFA500',    # Nízky - Orange
+                        3: '#FFFF00',    # Stredný - Yellow
+                        2: '#90EE90',    # Vyšší - Green
+                        1: '#0000FF'     # Vysoký - Blue
+                    }
+                    
+                    category_labels = {
+                        'Fosfor (P)': {
+                            5: 'Veľmi nízky obsah (< 51 mg/kg)',
+                            4: 'Nízky obsah (51-81 mg/kg)', 
+                            3: 'Stredný obsah (81-116 mg/kg)', 
+                            2: 'Vyšší obsah (116-185 mg/kg)', 
+                            1: 'Vysoký obsah (> 185 mg/kg)'
+                        },
+                        'Draslík (K)': {
+                            5: 'Veľmi nízky obsah (< 101 mg/kg)',
+                            4: 'Nízky obsah (101-161 mg/kg)', 
+                            3: 'Stredný obsah (161-276 mg/kg)', 
+                            2: 'Vyšší obsah (276-380 mg/kg)', 
+                            1: 'Vysoký obsah (> 380 mg/kg)'
+                        }
+                    }
+                    
+                    # Pridanie kategórií pre body
+                    gdf_points['nutrient_category'] = gdf_points.apply(
+                        lambda row: categorize_nutrient(selected_color_param, row['p'] if selected_color_param == 'Fosfor (P)' else row['k']), 
+                        axis=1
+                    )
+                    
+                    # Kontrola, či sú potrebné dáta pre mapu
+                    if len(gdf_points) > 0 and len(gdf_parcels) > 0:
+                        # Vytvorenie figúry
+                        fig = go.Figure()
+                        
+                        # Pridanie hraníc parcely
+                        for idx, row in gdf_parcels.iterrows():
+                            # Extrakcia súradníc hraníc
+                            boundary_lons, boundary_lats = row.geometry.exterior.xy
+                            
+                            # Pridanie hraníc parcely
+                            fig.add_trace(go.Scattermapbox(
+                                mode="lines",
+                                lon=list(boundary_lons),
+                                lat=list(boundary_lats),
+                                line=dict(color='black', width=2),
+                                opacity=0.7,
+                                showlegend=False,
+                                hoverinfo='none'
+                            ))
+                        
+                        # Pridanie bodov pôdnych vzoriek
+                        fig.add_trace(go.Scattermapbox(
+                            lat=gdf_points.geometry.y.tolist(),
+                            lon=gdf_points.geometry.x.tolist(),
+                            mode='markers',
+                            marker=dict(
+                                size=10,
+                                color=[color_map[gdf_points['nutrient_category'].iloc[i]] for i in range(len(gdf_points))],
+                                colorscale=[
+                                    [0, color_map[5]],
+                                    [0.25, color_map[4]],
+                                    [0.5, color_map[3]],
+                                    [0.75, color_map[2]],
+                                    [1, color_map[1]]
+                                ],
+                                showscale=False,  # Hide color scale
+                                colorbar=dict(
+                                    title=f'Kategória {selected_color_param}',
+                                    tickvals=[5, 4, 3, 2, 1],
+                                    ticktext=[category_labels[selected_color_param][i] for i in [5, 4, 3, 2, 1]]
+                                )
+                            ),
+                            text=[f'ID: {id}<br>P: {p:.2f}<br>K: {k:.2f}<br>pH: {ph:.2f}<br>Kategória {selected_color_param}: {category_labels[selected_color_param][categorize_nutrient(selected_color_param, p if selected_color_param == "Fosfor (P)" else k)]}' for id, p, k, ph in zip(gdf_points['id'], gdf_points['p'], gdf_points['k'], gdf_points['ph'])],
+                            hoverinfo='text',
+                            name='Vzorky pôdy'
+                        ))
+                        
+                        # Nastavenie layoutu mapy
+                        fig.update_layout(
+                            mapbox_style="carto-positron",
+                            mapbox=dict(
+                                center=dict(
+                                    lat=gdf_points.geometry.centroid.y.mean(),
+                                    lon=gdf_points.geometry.centroid.x.mean()
+                                ),
+                                zoom=14
+                            ),
+                            height=500,
+                            margin={"l":0,"r":0,"t":50,"b":0}
+                        )
+                        
+                        # Zobrazenie mapy
+                        st.plotly_chart(fig, use_container_width=True, key='parcel_soil_samples_map')
+                    else:
+                        st.warning("Nedostatok dát pre vytvorenie mapy pôdnych vzoriek.")
+            else:
+                st.warning("Nepodarilo sa načítať zdrojové dáta pre výpočet.")
         else:
-            st.warning("Pre túto parcelu nie sú dostupné geometrické údaje.")
-    
+            st.warning("Pre túto parcelu nie sú k dispozícii plánovacie dáta pre sezónu 2025/2026.")
+        
     except Exception as e:
-        st.error(f"Chyba pri spracovaní dát parcely: {e}")
-    
+        st.error(f"Nastala chyba pri spracovaní dát: {e}")
+        import traceback
+        st.error(traceback.format_exc())
     finally:
-        # Zatvorenie databázového spojenia
         engine.dispose()
+
+def get_nutrient_demand_tables(crop):
+    """Generate nutrient demand tables dynamically based on crop type"""
+    # Definície skupín plodín
+    wheat_like_crops = ['Pšenica letná ozimná', 'Jačmeň jarný', 'Kapusta repková pravá - ozimná', 'Pšenica tvrdá', 'Slnečnica ročná']
+    corn_like_crops = ['Kukurica', 'Repa cukrová']
+
+    # Tabuľka pre fosfor (P2O5)
+    p_demand_data = []
+    k_demand_data = []
+
+    # Spoločné kategórie pre všetky plodiny
+    p_demand_data.append(["Kategória 0", "Základná potreba * 2.2915", "Ak nie je špecifická kategória"])
+    k_demand_data.append(["Kategória 0", "Základná potreba * 1.2", "Ak nie je špecifická kategória"])
+
+    # Dynamické generovanie tabuliek podľa plodiny
+    if crop in wheat_like_crops:
+        p_demand_data.extend([
+            ["Kategória 5 (veľmi nízky obsah)", "105 kg/ha", "Najvyššia dávka"],
+            ["Kategória 4 (nízky obsah)", "85 kg/ha", "Stredne vysoká dávka"],
+            ["Kategória 3 (stredný obsah)", "70 kg/ha", "Stredná dávka"],
+            ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+        ])
+        
+        k_demand_data.extend([
+            ["Kategória 5 (veľmi nízky obsah)", "180 kg/ha", "Najvyššia dávka"],
+            ["Kategória 4 (nízky obsah)", "140 kg/ha", "Stredne vysoká dávka"],
+            ["Kategória 3 (stredný obsah)", "120 kg/ha", "Stredná dávka"],
+            ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+        ])
+    
+    elif crop in corn_like_crops:
+        if crop == 'Kukurica':
+            p_demand_data.extend([
+                ["Kategória 5 (veľmi nízky obsah)", "150 kg/ha", "Najvyššia dávka"],
+                ["Kategória 4 (nízky obsah)", "120 kg/ha", "Stredne vysoká dávka"],
+                ["Kategória 3 (stredný obsah)", "100 kg/ha", "Stredná dávka"],
+                ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+            ])
+            
+            k_demand_data.extend([
+                ["Kategória 5 (veľmi nízky obsah)", "180 kg/ha", "Najvyššia dávka"],
+                ["Kategória 4 (nízky obsah)", "140 kg/ha", "Stredne vysoká dávka"],
+                ["Kategória 3 (stredný obsah)", "120 kg/ha", "Stredná dávka"],
+                ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+            ])
+        
+        elif crop == 'Repa cukrová':
+            p_demand_data.extend([
+                ["Kategória 5 (veľmi nízky obsah)", "150 kg/ha", "Najvyššia dávka"],
+                ["Kategória 4 (nízky obsah)", "120 kg/ha", "Stredne vysoká dávka"],
+                ["Kategória 3 (stredný obsah)", "100 kg/ha", "Stredná dávka"],
+                ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+            ])
+            
+            k_demand_data.extend([
+                ["Kategória 5 (veľmi nízky obsah)", "260 kg/ha", "Najvyššia dávka"],
+                ["Kategória 4 (nízky obsah)", "200 kg/ha", "Stredne vysoká dávka"],
+                ["Kategória 3 (stredný obsah)", "170 kg/ha", "Stredná dávka"],
+                ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+            ])
+    
+    # Ak nie je špecifická plodina, pridať všeobecné kategórie
+    if not p_demand_data or not k_demand_data:
+        p_demand_data.extend([
+            ["Kategória 5 (veľmi nízky obsah)", "Individuálne podľa plodiny", "Najvyššia dávka"],
+            ["Kategória 4 (nízky obsah)", "Individuálne podľa plodiny", "Stredne vysoká dávka"],
+            ["Kategória 3 (stredný obsah)", "Individuálne podľa plodiny", "Stredná dávka"],
+            ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+        ])
+        
+        k_demand_data.extend([
+            ["Kategória 5 (veľmi nízky obsah)", "Individuálne podľa plodiny", "Najvyššia dávka"],
+            ["Kategória 4 (nízky obsah)", "Individuálne podľa plodiny", "Stredne vysoká dávka"],
+            ["Kategória 3 (stredný obsah)", "Individuálne podľa plodiny", "Stredná dávka"],
+            ["Kategória 1-2 (vysoký obsah)", "0 kg/ha", "Žiadna dávka"]
+        ])
+
+    # Vytvorenie DataFrame
+    p_demand_df = pd.DataFrame(p_demand_data, columns=["Kategória", "Dávka P2O5", "Poznámka"])
+    k_demand_df = pd.DataFrame(k_demand_data, columns=["Kategória", "Dávka K2O", "Poznámka"])
+
+    return p_demand_df, k_demand_df
