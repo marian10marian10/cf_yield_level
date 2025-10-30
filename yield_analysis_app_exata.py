@@ -9,7 +9,6 @@ from modules.data_loader import load_data, calculate_yield_percentage
 from modules.enterprise_stats import show_enterprise_statistics
 from modules.parcel_stats import show_parcel_statistics
 from modules.crop_stats_db import show_crop_statistics_from_db
-from modules.advanced_analytics import show_advanced_analytics
 from modules.analyses import show_planning
 from modules.simple_maps import show_maps
 
@@ -99,11 +98,6 @@ def main():
             "title": "🏞️ Štatistiky parcely",
             "icon": "🏞️",
             "description": "Detailné štatistiky parciel"
-        },
-        "advanced": {
-            "title": "📈 Pokročilé analýzy",
-            "icon": "📈",
-            "description": "Komplexné analytické nástroje"
         },
         "planning": {
             "title": "📅 Plánovanie",
@@ -271,9 +265,6 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         
         show_parcel_statistics(df, selected_parcel)
-        
-    elif st.session_state.active_tab == "advanced":
-        show_advanced_analytics(df)
         
     elif st.session_state.active_tab == "planning":
         show_planning(df)
