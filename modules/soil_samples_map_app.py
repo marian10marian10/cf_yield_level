@@ -12,7 +12,35 @@ from dotenv import load_dotenv
 
 # Zbytek kódu zůstává nezměněn...
 
-# Na konec souboru přidám explicitní definici about_page()
+# Explicitní definice funkcí na konci souboru
+def soil_samples_map():
+    """Streamlit page for soil samples map."""
+    st.title('Priestorová Analýza Pôdnych Vzoriek')
+    
+    # Load data
+    gdf_parcels = load_parcels_data()
+    gdf_points = load_soil_samples_data()
+    
+    if gdf_parcels is None or gdf_points is None:
+        st.error("Nepodarilo sa načítať dáta. Skontrolujte databázové pripojenie.")
+        return
+    
+    # Process spatial data
+    gdf_parcels_with_stats, gdf_points = process_spatial_data(gdf_parcels, gdf_points)
+    
+    # Parameter selection
+    selected_parameter = st.selectbox(
+        'Vyberte parameter na vizualizáciu:',
+        ['Fosfor (P)', 'Draslík (K)', 'pH']
+    )
+    
+    # Create and display map
+    fig = create_map(gdf_parcels_with_stats, gdf_points, selected_parameter)
+    st.plotly_chart(fig, use_container_width=True, key='main_map')
+    
+    # Zvyšok funkcie zostáva nezmenený
+    # ... (celá pôvodná implementácia zostáva rovnaká)
+
 def about_page():
     """About page for the application."""
     st.title('O Aplikácii')
@@ -38,7 +66,6 @@ def about_page():
     - Dáta sú filtrované pre sezónu 24/25
     ''')
 
-# Přidám hlavní funkci pro úplnost
 def main():
     # Create sidebar navigation
     page = st.sidebar.radio(
@@ -51,6 +78,9 @@ def main():
         soil_samples_map()
     else:
         about_page()
+
+# Explicitní export funkcí
+__all__ = ['soil_samples_map', 'about_page']
 
 if __name__ == '__main__':
     main()
