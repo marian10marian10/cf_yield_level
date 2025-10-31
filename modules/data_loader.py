@@ -13,7 +13,14 @@ load_dotenv()
 # Database connection parameters
 DB_USER_DESTINATION = os.getenv('DB_USER_DESTINATION', 'db_admin')
 DB_PASSWORD_DESTINATION = os.getenv('DB_PASSWORD_DESTINATION', '')
-DB_HOST_DESTINATION = os.getenv('DB_HOST_DESTINATION', 'localhost')
+DB_HOST_DESTINATION = os.getenv('DB_HOST_DESTINATION')
+
+# Kontrola povinných premenných prostredia
+REQUIRED_ENV_VARS = ['DB_USER_DESTINATION', 'DB_PASSWORD_DESTINATION', 'DB_HOST_DESTINATION', 'DB_NAME_DESTINATION']
+missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+
+if missing_vars:
+    raise ValueError(f"Chýbajúce povinné premenné prostredia: {', '.join(missing_vars)}. Skontrolujte .env súbor.")
 DB_NAME_DESTINATION = os.getenv('DB_NAME_DESTINATION', 'postgres')
 
 @st.cache_data
