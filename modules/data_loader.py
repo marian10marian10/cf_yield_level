@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 import logging
 import socket
 
-# Konfigurace logovania
+# Konfigurácia logovania
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -17,27 +17,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-def test_network_connection(host, port=5432, timeout=5):
-    """
-    Test sieťového pripojenia k databázovému serveru
-    
-    Args:
-        host (str): Hostname databázového servera
-        port (int): Port databázového servera
-        timeout (int): Timeout pre pripojenie v sekundách
-    
-    Returns:
-        bool: True ak je pripojenie úspešné, inak False
-    """
-    try:
-        socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-        logger.info(f"Úspešné sieťové pripojenie k {host}:{port}")
-        return True
-    except (socket.timeout, socket.error) as e:
-        logger.error(f"Chyba sieťového pripojenia k {host}:{port}: {e}")
-        return False
 
 def safe_get_env(env_vars, default=None):
     """
@@ -85,47 +64,60 @@ def safe_get_env(env_vars, default=None):
     logger.warning(f"Nepodarilo sa nájsť hodnotu pre premenné: {env_vars}")
     return default
 
+# Prednastavené hodnoty pre databázové pripojenie
+DEFAULT_DB_CONFIG = {
+    'host': 'team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com',
+    'user': 'db_admin',
+    'password': 'Ybm=Zjk#sTf3#^]ybD<k',
+    'name': 'postgres',
+    'port': '5432'
+}
+
 # Database connection parameters
 DB_HOST_DESTINATION = safe_get_env([
     'DB_HOST_DESTINATION', 
     'RAILWAY_DB_HOST', 
     'DATABASE_HOST'
-], default='localhost')
+], default=DEFAULT_DB_CONFIG['host'])
 
 DB_USER_DESTINATION = safe_get_env([
     'DB_USER_DESTINATION', 
     'RAILWAY_DB_USER', 
     'DATABASE_USER'
-], default='db_admin')
+], default=DEFAULT_DB_CONFIG['user'])
 
 DB_PASSWORD_DESTINATION = safe_get_env([
     'DB_PASSWORD_DESTINATION', 
     'RAILWAY_DB_PASSWORD', 
     'DATABASE_PASSWORD'
-], default='')
+], default=DEFAULT_DB_CONFIG['password'])
 
 DB_NAME_DESTINATION = safe_get_env([
     'DB_NAME_DESTINATION', 
     'RAILWAY_DB_NAME', 
     'DATABASE_NAME'
-], default='postgres')
+], default=DEFAULT_DB_CONFIG['name'])
 
 DB_PORT_DESTINATION = safe_get_env([
     'DB_PORT_DESTINATION', 
     'RAILWAY_DB_PORT', 
     'DATABASE_PORT'
-], default='5432')
+], default=DEFAULT_DB_CONFIG['port'])
+
+def get_database_connection_string():
+    """
+    Vygeneruje connection string pre databázu
+    
+    Returns:
+        str: Connection string pre SQLAlchemy
+    """
+    return f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
 
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
     try:
-        # Kontrola sieťového pripojenia pred pokusom o pripojenie
-        if not test_network_connection(DB_HOST_DESTINATION, int(DB_PORT_DESTINATION)):
-            st.error(f"Nepodarilo sa pripojiť k databázovému serveru {DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}")
-            return None
-
         # Vytvorenie connection string
-        connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
+        connection_string = get_database_connection_string()
         
         logger.info(f"Pripájanie k databáze: {DB_HOST_DESTINATION}")
         logger.info(f"Parametre pripojenia: user={DB_USER_DESTINATION}, host={DB_HOST_DESTINATION}, port={DB_PORT_DESTINATION}, db={DB_NAME_DESTINATION}")
