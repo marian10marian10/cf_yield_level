@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import logging
 
 # Konfigurácia logovania
@@ -13,16 +13,6 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-# Funkcia na načítanie konfigurácie z railway.toml
-def load_railway_config():
-    try:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
-        if os.path.exists(config_path):
-            return toml.load(config_path)
-    except Exception as e:
-        logger.warning(f"Chyba pri načítaní railway.toml: {e}")
-    return {}
 
 # Funkcia na bezpečné načítanie premennej prostredia
 def safe_get_env(env_vars, default=None):
@@ -36,29 +26,12 @@ def safe_get_env(env_vars, default=None):
     Returns:
         str: Hodnota premennej prostredia alebo predvolená hodnota
     """
-    railway_config = load_railway_config().get('database', {})
-    
     for var in env_vars:
-        # Najprv skúsi premenné prostredia
         value = os.getenv(var)
         if value:
             logger.info(f"Použitá premenná prostredia: {var}")
             return value
     
-    # Potom skúsi railway.toml
-    for var_name, config_key in [
-        ('DB_HOST_DESTINATION', 'host'),
-        ('DB_USER_DESTINATION', 'user'),
-        ('DB_PASSWORD_DESTINATION', 'password'),
-        ('DB_NAME_DESTINATION', 'name'),
-        ('DB_PORT_DESTINATION', 'port')
-    ]:
-        value = railway_config.get(config_key)
-        if value:
-            logger.info(f"Použitá hodnota z railway.toml: {config_key}")
-            return value
-    
-    # Ak nič nenájde, vráti predvolenú hodnotu
     logger.warning(f"Nepodarilo sa nájsť hodnotu pre premenné: {env_vars}")
     return default
 
@@ -93,39 +66,6 @@ DB_PORT_DESTINATION = safe_get_env([
     'DATABASE_PORT'
 ], default='5432')
 
-# Kontrola povinných premenných
-def validate_db_config():
-    """
-    Validácia konfigurácie databázy
-    
-    Raises:
-        ValueError: Ak chýbajú kritické konfiguračné parametre
-    """
-    missing_params = []
-    
-    if not DB_HOST_DESTINATION:
-        missing_params.append("Hostiteľ databázy (DB_HOST_DESTINATION)")
-    
-    if not DB_USER_DESTINATION:
-        missing_params.append("Používateľ databázy (DB_USER_DESTINATION)")
-    
-    if not DB_PASSWORD_DESTINATION:
-        missing_params.append("Heslo databázy (DB_PASSWORD_DESTINATION)")
-    
-    if not DB_NAME_DESTINATION:
-        missing_params.append("Názov databázy (DB_NAME_DESTINATION)")
-    
-    if missing_params:
-        error_message = "Chýbajúce konfiguračné parametre databázy:\n" + "\n".join(
-            f"- {param}" for param in missing_params
-        )
-        logger.error(error_message)
-        st.error(error_message + "\n\nSkontrolujte .env, railway.toml alebo nastavenia Railway.")
-        raise ValueError(error_message)
-
-# Vykonanie validácie
-validate_db_config()
-
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
     try:
@@ -147,23 +87,19 @@ def load_data():
                                pool_recycle=1800)         # Recyklácia pripojení každých 30 minút
         
         # Najprv skontrolujeme dostupné stĺpce v tabuľke
-        check_columns_query = """
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_schema = 'yield_level' 
-        AND table_name = 'skeagis_yields'
-        ORDER BY ordinal_position
-        """
-        
-        try:
-            columns_df = pd.read_sql(check_columns_query, engine)
-            available_columns = columns_df['column_name'].tolist()
+        with engine.connect() as connection:
+            # Použitie text() pre bezpečný SQL dopyt
+            columns_query = text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_schema = 'yield_level' 
+            AND table_name = 'skeagis_yields'
+            ORDER BY ordinal_position
+            """)
+            
+            columns_result = connection.execute(columns_query)
+            available_columns = [row[0] for row in columns_result]
             logger.info(f"Dostupné stĺpce: {available_columns}")
-        except Exception as column_error:
-            logger.error(f"Chyba pri načítaní stĺpcov: {column_error}")
-            st.error(f"Chyba pri načítaní stĺpcov: {column_error}")
-            st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
-            return None
         
         # Dynamické vytvorenie SELECT query na základe dostupných stĺpcov
         select_columns = []
@@ -183,10 +119,11 @@ def load_data():
         columns_str = ', '.join(select_columns)
         
         # Samotný dopyt na načítanie dát
-        query = f"SELECT {columns_str} FROM yield_level.skeagis_yields"
+        query = text(f"SELECT {columns_str} FROM yield_level.skeagis_yields")
         
         # Načítanie dát
-        df = pd.read_sql(query, engine)
+        with engine.connect() as connection:
+            df = pd.read_sql(query, connection)
         
         # Zatvorenie spojenia
         engine.dispose()
@@ -223,6 +160,14 @@ def calculate_yield_percentage(df):
             # Pridajte ďalšie mapovanie podľa potreby
         }
         
+        # Bezpečná konverzia ppa_crop_id na integer
+        def safe_int_convert(value):
+            try:
+                return int(float(str(value).strip()))
+            except (ValueError, TypeError):
+                return None
+        
+        df['ppa_crop_id'] = df['ppa_crop_id'].apply(safe_int_convert)
         df['crop'] = df['ppa_crop_id'].map(crop_mapping).fillna('Iné')
         
         # Výpočet percentuálnych výnosov pre každú plodinu
