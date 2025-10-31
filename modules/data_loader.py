@@ -6,15 +6,39 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine, text
 import logging
+import socket
 
-# Konfigurácia logovania
-logging.basicConfig(level=logging.INFO)
+# Konfigurace logovania
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Funkcia na bezpečné načítanie premennej prostredia
+def test_network_connection(host, port=5432, timeout=5):
+    """
+    Test sieťového pripojenia k databázovému serveru
+    
+    Args:
+        host (str): Hostname databázového servera
+        port (int): Port databázového servera
+        timeout (int): Timeout pre pripojenie v sekundách
+    
+    Returns:
+        bool: True ak je pripojenie úspešné, inak False
+    """
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        logger.info(f"Úspešné sieťové pripojenie k {host}:{port}")
+        return True
+    except (socket.timeout, socket.error) as e:
+        logger.error(f"Chyba sieťového pripojenia k {host}:{port}: {e}")
+        return False
+
 def safe_get_env(env_vars, default=None):
     """
     Bezpečne načíta prvú neprázdnu premennú z poskytnutého zoznamu
@@ -26,6 +50,32 @@ def safe_get_env(env_vars, default=None):
     Returns:
         str: Hodnota premennej prostredia alebo predvolená hodnota
     """
+    # Najprv skúsi railway.toml
+    try:
+        railway_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
+        if os.path.exists(railway_config_path):
+            railway_config = toml.load(railway_config_path)
+            database_config = railway_config.get('database', {})
+            
+            # Mapovanie kľúčov z railway.toml na premenné prostredia
+            config_map = {
+                'DB_HOST_DESTINATION': 'host',
+                'DB_USER_DESTINATION': 'user',
+                'DB_PASSWORD_DESTINATION': 'password',
+                'DB_NAME_DESTINATION': 'name',
+                'DB_PORT_DESTINATION': 'port'
+            }
+            
+            for env_var, config_key in config_map.items():
+                if env_var in env_vars:
+                    value = database_config.get(config_key)
+                    if value:
+                        logger.info(f"Použitá hodnota z railway.toml: {config_key}")
+                        return value
+    except Exception as e:
+        logger.warning(f"Chyba pri čítaní railway.toml: {e}")
+    
+    # Potom skúsi premenné prostredia
     for var in env_vars:
         value = os.getenv(var)
         if value:
@@ -69,10 +119,16 @@ DB_PORT_DESTINATION = safe_get_env([
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
     try:
+        # Kontrola sieťového pripojenia pred pokusom o pripojenie
+        if not test_network_connection(DB_HOST_DESTINATION, int(DB_PORT_DESTINATION)):
+            st.error(f"Nepodarilo sa pripojiť k databázovému serveru {DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}")
+            return None
+
         # Vytvorenie connection string
         connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
         
         logger.info(f"Pripájanie k databáze: {DB_HOST_DESTINATION}")
+        logger.info(f"Parametre pripojenia: user={DB_USER_DESTINATION}, host={DB_HOST_DESTINATION}, port={DB_PORT_DESTINATION}, db={DB_NAME_DESTINATION}")
         
         # Vytvorenie engine s pridanými parametrami pre lepšiu diagnostiku
         engine = create_engine(connection_string, 
