@@ -8,64 +8,59 @@ import numpy as np
 from sqlalchemy import create_engine, text
 import logging
 import socket
+import traceback
 
 # Konfigurácia logovania
-logging.basicConfig(
-    level=logging.DEBUG, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('database_connection.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+def setup_logging():
+    """Nastavenie komplexného logovania"""
+    # Vytvorenie adresára pre logy, ak neexistuje
+    log_dir = '/tmp/logs'
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Konfigurácia hlavného logovania
+    logging.basicConfig(
+        level=logging.DEBUG, 
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(log_dir, 'database_connection.log'), mode='w'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    # Konfigurácia logovania pre SQLAlchemy
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+    logging.getLogger('sqlalchemy.pool').setLevel(logging.INFO)
+
+# Volanie setup_logging() hneď po definícii
+setup_logging()
 logger = logging.getLogger(__name__)
 
-# Funkcia na komplexnú diagnostiku konfigurácie
-def diagnose_database_config():
-    """
-    Komplexná diagnostika konfigurácie databázy
-    
-    Zaznamenáva všetky možné zdroje konfigurácie a ich hodnoty
-    """
-    logger.debug("Začiatok diagnostiky databázovej konfigurácie")
-    
-    # Kontrola environment premenných
-    logger.debug("Environment premenné:")
-    env_vars = [
-        'DB_HOST_DESTINATION', 
-        'DB_USER_DESTINATION', 
-        'DB_PASSWORD_DESTINATION', 
-        'DB_NAME_DESTINATION', 
-        'DB_PORT_DESTINATION',
-        'RAILWAY_DB_HOST',
-        'RAILWAY_DB_USER',
-        'RAILWAY_DB_PASSWORD',
-        'RAILWAY_DB_NAME',
-        'RAILWAY_DB_PORT'
-    ]
-    
-    for var in env_vars:
-        value = os.getenv(var)
-        logger.debug(f"{var}: {value if 'PASSWORD' not in var else '****'}")
-    
-    # Kontrola railway.toml
-    railway_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
-    logger.debug(f"Cesta k railway.toml: {railway_config_path}")
-    
-    try:
-        if os.path.exists(railway_config_path):
-            railway_config = toml.load(railway_config_path)
-            logger.debug("Obsah railway.toml:")
-            logger.debug(str(railway_config))
+# Pridanie funkcie na zaznamenanie všetkých environment premenných
+def log_environment_variables():
+    """Zaznamenanie všetkých environment premenných"""
+    logger.info("--- ENVIRONMENT VARIABLES ---")
+    for key, value in os.environ.items():
+        # Maskuj hesla a citlivé údaje
+        if any(secret in key.lower() for secret in ['password', 'secret', 'token', 'key']):
+            logger.info(f"{key}: ****")
         else:
-            logger.debug("Súbor railway.toml neexistuje")
-    except Exception as e:
-        logger.error(f"Chyba pri čítaní railway.toml: {e}")
-    
-    # Kontrola aktuálneho pracovného adresára a ciest
-    logger.debug(f"Aktuálny pracovný adresár: {os.getcwd()}")
-    logger.debug(f"Cesta skriptu: {__file__}")
-    logger.debug(f"Systémové cesty: {sys.path}")
+            logger.info(f"{key}: {value}")
+    logger.info("--- END ENVIRONMENT VARIABLES ---")
+
+# Prednastavené hodnoty pre databázové pripojenie
+DEFAULT_DB_CONFIG = {
+    'host': 'team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com',
+    'user': 'db_admin',
+    'password': 'Ybm=Zjk#sTf3#^]ybD<k',
+    'name': 'postgres',
+    'port': '5432'
+}
+
+# Load environment variables
+load_dotenv()
+
+# Zavolanie funkcie na zaznamenanie environment premenných
+log_environment_variables()
 
 def safe_get_env(env_vars, default=None):
     """
@@ -80,58 +75,16 @@ def safe_get_env(env_vars, default=None):
     """
     logger.debug(f"Hľadanie hodnoty pre premenné: {env_vars}")
     
-    # Najprv skúsi railway.toml
-    try:
-        railway_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
-        logger.debug(f"Cesta k railway.toml: {railway_config_path}")
-        
-        if os.path.exists(railway_config_path):
-            railway_config = toml.load(railway_config_path)
-            database_config = railway_config.get('database', {})
-            logger.debug(f"Konfigurácia z railway.toml: {database_config}")
-            
-            # Mapovanie kľúčov z railway.toml na premenné prostredia
-            config_map = {
-                'DB_HOST_DESTINATION': 'host',
-                'DB_USER_DESTINATION': 'user',
-                'DB_PASSWORD_DESTINATION': 'password',
-                'DB_NAME_DESTINATION': 'name',
-                'DB_PORT_DESTINATION': 'port'
-            }
-            
-            for env_var, config_key in config_map.items():
-                if env_var in env_vars:
-                    value = database_config.get(config_key)
-                    if value:
-                        logger.debug(f"Použitá hodnota z railway.toml: {config_key} = {value}")
-                        return value
-    except Exception as e:
-        logger.error(f"Chyba pri čítaní railway.toml: {e}")
-    
-    # Potom skúsi premenné prostredia
+    # Najprv skúsi premenné prostredia
     for var in env_vars:
         value = os.getenv(var)
         if value:
             logger.debug(f"Použitá premenná prostredia: {var} = {value}")
             return value
     
+    # Potom skúsi prednastavené hodnoty
     logger.warning(f"Nepodarilo sa nájsť hodnotu pre premenné: {env_vars}")
     return default
-
-# Prednastavené hodnoty pre databázové pripojenie
-DEFAULT_DB_CONFIG = {
-    'host': 'team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com',
-    'user': 'db_admin',
-    'password': 'Ybm=Zjk#sTf3#^]ybD<k',
-    'name': 'postgres',
-    'port': '5432'
-}
-
-# Vykonanie diagnostiky pred načítaním konfigurácie
-diagnose_database_config()
-
-# Load environment variables
-load_dotenv()
 
 # Database connection parameters
 DB_HOST_DESTINATION = safe_get_env([
@@ -164,12 +117,6 @@ DB_PORT_DESTINATION = safe_get_env([
     'DATABASE_PORT'
 ], default=DEFAULT_DB_CONFIG['port'])
 
-logger.debug(f"Finálna konfigurácia:")
-logger.debug(f"Host: {DB_HOST_DESTINATION}")
-logger.debug(f"User: {DB_USER_DESTINATION}")
-logger.debug(f"Name: {DB_NAME_DESTINATION}")
-logger.debug(f"Port: {DB_PORT_DESTINATION}")
-
 def get_database_connection_string():
     """
     Vygeneruje connection string pre databázu
@@ -177,9 +124,9 @@ def get_database_connection_string():
     Returns:
         str: Connection string pre SQLAlchemy
     """
-    connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
-    logger.debug(f"Generovaný connection string: {connection_string.replace(DB_PASSWORD_DESTINATION, '****')}")
-    return connection_string
+    connection_string = f"postgresql://{DB_USER_DESTINATION}:****@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
+    logger.debug(f"Generovaný connection string: {connection_string}")
+    return f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
 
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
@@ -220,22 +167,33 @@ def load_data():
         # Dynamické vytvorenie SELECT query na základe dostupných stĺpcov
         select_columns = []
         required_columns = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id']
+        optional_columns = ['yield_area', 'yield_sum', 'id', 'parcel_season_id']
         
+        # Pridaj požadované stĺpce
         for col in required_columns:
             if col in available_columns:
                 select_columns.append(col)
             else:
-                st.warning(f"Stĺpec '{col}' neexistuje v tabuľke!")
+                logger.warning(f"Požadovaný stĺpec '{col}' neexistuje v tabuľke!")
         
-        # Pridanie area ak existuje
-        if 'area' in available_columns:
-            select_columns.append('area')
+        # Pridaj voliteľné stĺpce
+        for col in optional_columns:
+            if col in available_columns:
+                select_columns.append(col)
         
         # Vytvorenie SQL query - všetky sezóny pre výnosy
         columns_str = ', '.join(select_columns)
         
-        # Samotný dopyt na načítanie dát
-        query = text(f"SELECT {columns_str} FROM yield_level.skeagis_yields")
+        # Samotný dopyt na načítanie dát s ochranou pred prázdnymi hodnotami
+        query = text(f"""
+        SELECT {columns_str}
+        FROM yield_level.skeagis_yields
+        WHERE 
+            yield_ha IS NOT NULL 
+            AND yield_ha > 0 
+            AND ppa_crop_id IS NOT NULL
+        LIMIT 10000  -- Pridaný limit pre istotu
+        """)
         
         # Načítanie dát
         with engine.connect() as connection:
@@ -244,10 +202,20 @@ def load_data():
         # Zatvorenie spojenia
         engine.dispose()
         
+        # Kontrola načítaných dát
+        if df.empty:
+            logger.warning("Načítaný prázdny DataFrame")
+            st.warning("Nepodarilo sa načítať žiadne dáta. Skontrolujte databázu.")
+            return None
+        
+        logger.info(f"Načítaných riadkov: {len(df)}")
+        logger.info(f"Stĺpce DataFrame: {df.columns.tolist()}")
+        
         return df
     
     except Exception as e:
         logger.error(f"Chyba pri načítaní dát: {e}")
+        logger.error(traceback.format_exc())  # Pridaný detailný traceback
         st.error(f"Chyba pri načítaní dát: {e}")
         st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
         return None
