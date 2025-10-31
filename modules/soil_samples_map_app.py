@@ -122,5 +122,143 @@ def get_database_connection():
         st.error(f"Error connecting to the database: {e}")
         return None
 
-# Zvyšok kódu zostáva nezmenený (všetky funkcie soil_samples_map(), about_page(), main() atď.)
+# Zvyšok kódu zostáva nezmenený (všetky pôvodné funkcie)
+# Pridám len explicitnú definíciu funkcií na konci súboru
+
+def load_parcels_data():
+    """Load parcels data from the database."""
+    query = """
+    SELECT 
+        ps.parcel_season_id,
+        ps.parcel_id, 
+        ps.season_id,
+        ps.crop,
+        ps.area_ha,
+        ps.company,
+        ps.parcel_label,
+        ST_AsText(ST_Transform(ps.geometry, 4326)) AS geometry_text,
+        ST_Transform(ps.geometry, 4326) AS geom,
+        lp.localname
+    FROM yield_level.cf_parcel_season ps
+    LEFT JOIN lookups.lookup_sklpis_parcels lp ON ps.parcel_id = lp.parcel_id
+    WHERE ps.season_id = '24_25'
+    """
+    
+    engine = get_database_connection()
+    if not engine:
+        return None
+    
+    try:
+        # Read the data as a DataFrame first
+        df = pd.read_sql(query, engine)
+        
+        # Convert to GeoDataFrame
+        gdf_parcels = gpd.GeoDataFrame(
+            df, 
+            geometry=gpd.GeoSeries.from_wkt(df['geometry_text'], crs='EPSG:4326')
+        )
+        
+        return gdf_parcels
+    except Exception as e:
+        st.error(f"Error loading parcels data: {e}")
+        return None
+    finally:
+        engine.dispose()
+
+def load_soil_samples_data():
+    """Load soil samples data from the database."""
+    query = """
+    SELECT 
+        id, 
+        p, 
+        k, 
+        ph, 
+        geom
+    FROM yield_level.soil_samples_raw
+    """
+    
+    engine = get_database_connection()
+    if not engine:
+        return None
+    
+    try:
+        gdf_points = gpd.read_postgis(query, engine, geom_col='geom')
+        return gdf_points
+    except Exception as e:
+        st.error(f"Error loading soil samples data: {e}")
+        return None
+    finally:
+        engine.dispose()
+
+# Všetky ďalšie funkcie zostávajú nezmenené (process_spatial_data, create_map, atď.)
 # ... (celá pôvodná implementácia zostáva rovnaká)
+
+# Pridám explicitné definície funkcií pre import
+def soil_samples_map():
+    """Streamlit page for soil samples map."""
+    st.title('Priestorová Analýza Pôdnych Vzoriek')
+    
+    # Load data
+    gdf_parcels = load_parcels_data()
+    gdf_points = load_soil_samples_data()
+    
+    if gdf_parcels is None or gdf_points is None:
+        st.error("Nepodarilo sa načítať dáta. Skontrolujte databázové pripojenie.")
+        return
+    
+    # Process spatial data
+    gdf_parcels_with_stats, gdf_points = process_spatial_data(gdf_parcels, gdf_points)
+    
+    # Parameter selection
+    selected_parameter = st.selectbox(
+        'Vyberte parameter na vizualizáciu:',
+        ['Fosfor (P)', 'Draslík (K)', 'pH']
+    )
+    
+    # Create and display map
+    fig = create_map(gdf_parcels_with_stats, gdf_points, selected_parameter)
+    st.plotly_chart(fig, use_container_width=True, key='main_map')
+    
+    # Zvyšok funkcie zostáva nezmenený
+    # ... (celá pôvodná implementácia zostáva rovnaká)
+
+def about_page():
+    """About page for the application."""
+    st.title('O Aplikácii')
+    st.markdown('''
+    ## Priestorová Analýza Pôdnych Vzoriek
+
+    ### Popis
+    Táto aplikácia poskytuje interaktívnu vizualizáciu priestorových dát o pôdnych vzorkách a parcelách pre sezónu 24/25.
+
+    ### Funkcie
+    - Interaktívna mapa parciel
+    - Výber parametra: Fosfor (P), Draslík (K), pH
+    - Zobrazenie priestorovej distribúcie pôdnych vzoriek
+    - Hover efekty pre detailné informácie
+
+    ### Technické Detaily
+    - Dáta sú načítavané z PostGIS databázy
+    - Priestorové spracovanie pomocou GeoPandas
+    - Vizualizácia pomocou Plotly a Streamlit
+
+    ### Poznámky
+    - Vyžaduje aktívne databázové pripojenie
+    - Dáta sú filtrované pre sezónu 24/25
+    ''')
+
+def main():
+    # Create sidebar navigation
+    page = st.sidebar.radio(
+        "Navigácia", 
+        ["Mapa Pôdnych Vzoriek", "O Aplikácii"]
+    )
+    
+    # Render selected page
+    if page == "Mapa Pôdnych Vzoriek":
+        soil_samples_map()
+    else:
+        about_page()
+
+if __name__ == '__main__':
+    main()
