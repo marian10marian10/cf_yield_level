@@ -122,8 +122,38 @@ def get_database_connection():
         st.error(f"Error connecting to the database: {e}")
         return None
 
+def process_spatial_data(gdf_parcels, gdf_points):
+    """Perform spatial join and aggregate soil sample data."""
+    try:
+        # Spatial join to assign points to parcels
+        gdf_points_with_parcels = gpd.sjoin(gdf_points, gdf_parcels, how='left')
+        
+        # Aggregate soil sample data by parcel
+        parcel_soil_stats = gdf_points_with_parcels.groupby('parcel_id').agg({
+            'p': 'mean',
+            'k': 'mean',
+            'ph': 'mean'
+        }).reset_index()
+        
+        # Merge aggregated stats back to parcels GeoDataFrame
+        gdf_parcels_with_stats = gdf_parcels.merge(parcel_soil_stats, on='parcel_id', how='left')
+        
+        # Ensure we're still working with a GeoDataFrame
+        if not isinstance(gdf_parcels_with_stats, gpd.GeoDataFrame):
+            gdf_parcels_with_stats = gpd.GeoDataFrame(
+                gdf_parcels_with_stats, 
+                geometry=gdf_parcels.geometry, 
+                crs=gdf_parcels.crs
+            )
+        
+        return gdf_parcels_with_stats, gdf_points
+    except Exception as e:
+        logger.error(f"Error in spatial data processing: {e}")
+        st.error(f"Chyba pri spracovaní priestorových dát: {e}")
+        return gdf_parcels, gdf_points
+
 # Zvyšok kódu zostáva nezmenený (všetky pôvodné funkcie)
-# Pridám len explicitnú definíciu funkcií na konci súboru
+# ... (celá pôvodná implementácia zostáva rovnaká)
 
 def load_parcels_data():
     """Load parcels data from the database."""
@@ -190,7 +220,7 @@ def load_soil_samples_data():
     finally:
         engine.dispose()
 
-# Všetky ďalšie funkcie zostávajú nezmenené (process_spatial_data, create_map, atď.)
+# Všetky ďalšie funkcie zostávajú nezmenené (create_map, atď.)
 # ... (celá pôvodná implementácia zostáva rovnaká)
 
 # Pridám explicitné definície funkcií pre import
