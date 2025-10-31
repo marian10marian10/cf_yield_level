@@ -13,3 +13,4 @@ toml==0.10.2
 openpyxl==3.1.2
 folium==0.15.1
 requests==2.31.0
+xlsxwriter==3.2.0

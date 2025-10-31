@@ -366,20 +366,24 @@ def show_planning(df):
         )
         
         # Excel download
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            display_df.to_excel(writer, index=False, sheet_name='Plánovanie')
-        excel_buffer.seek(0)
-        
-        st.download_button(
-            label="📊",  # Spreadsheet/chart icon
-            data=excel_buffer,
-            file_name="planning_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Stiahnuť Excel",
-            key="excel_download_planning",
-            type="secondary"
-        )
+        try:
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+                display_df.to_excel(writer, index=False, sheet_name='Plánovanie')
+            excel_buffer.seek(0)
+            
+            st.download_button(
+                label="📊",  # Spreadsheet/chart icon
+                data=excel_buffer,
+                file_name="planning_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Stiahnuť Excel",
+                key="excel_download_planning",
+                type="secondary"
+            )
+        except ImportError:
+            # Fallback to CSV if xlsxwriter is not available
+            st.warning("Excel export nie je dostupný. Použite CSV export.")
         
         # Uzavretie kontajnera
         st.markdown('</div>', unsafe_allow_html=True)
