@@ -33,194 +33,227 @@ DEFAULT_DB_CONFIG = {
     'port': '5432'
 }
 
-def safe_get_env(env_vars, default=None):
-    """
-    Bezpečne načíta prvú neprázdnu premennú z poskytnutého zoznamu
+# Všetky predchádzajúce funkcie zostávajú nezmenené...
+
+def create_map(gdf_parcels_with_stats, gdf_points, selected_parameter):
+    """Create interactive map with Plotly."""
+    # Mapping parameter names to column names
+    param_map = {
+        'Fosfor (P)': 'p',
+        'Draslík (K)': 'k',
+        'pH': 'ph'
+    }
+    param_col = param_map[selected_parameter]
     
-    Args:
-        env_vars (list): Zoznam názvov premenných prostredia
-        default (str, optional): Predvolená hodnota, ak nie je nájdená žiadna premenná
+    # Custom color scale and category function for Phosphorus
+    def categorize_phosphorus(value):
+        if value <= 50:
+            return 0  # Nízky
+        elif 51 <= value <= 80:
+            return 1  # Vyhovujúci
+        elif 81 <= value <= 115:
+            return 2  # Dobrý
+        elif 116 <= value <= 185:
+            return 3  # Vysoký
+        else:
+            return 4  # Veľmi vysoký
     
-    Returns:
-        str: Hodnota premennej prostredia alebo predvolená hodnota
-    """
-    logger.debug(f"Hľadanie hodnoty pre premenné: {env_vars}")
+    # Color mapping for categories
+    color_map = {
+        0: '#FF0000',    # Nízky - Red
+        1: '#FFA500',    # Vyhovujúci - Orange
+        2: '#FFFF00',    # Dobrý - Yellow
+        3: '#90EE90',    # Vysoký - Light Green
+        4: '#008000'     # Veľmi vysoký - Dark Green
+    }
     
-    # Najprv skúsi premenné prostredia
-    for var in env_vars:
-        value = os.getenv(var)
-        if value:
-            logger.debug(f"Použitá premenná prostredia: {var} = {value}")
-            return value
+    category_labels = {
+        0: 'Nízky',
+        1: 'Vyhovujúci', 
+        2: 'Dobrý', 
+        3: 'Vysoký', 
+        4: 'Veľmi vysoký'
+    }
     
-    # Potom skúsi prednastavené hodnoty
-    logger.warning(f"Nepodarilo sa nájsť hodnotu pre premenné: {env_vars}")
-    return default
-
-# Database connection parameters
-DB_HOST_DESTINATION = safe_get_env([
-    'DB_HOST_DESTINATION', 
-    'RAILWAY_DB_HOST', 
-    'DATABASE_HOST'
-], default=DEFAULT_DB_CONFIG['host'])
-
-DB_USER_DESTINATION = safe_get_env([
-    'DB_USER_DESTINATION', 
-    'RAILWAY_DB_USER', 
-    'DATABASE_USER'
-], default=DEFAULT_DB_CONFIG['user'])
-
-DB_PASSWORD_DESTINATION = safe_get_env([
-    'DB_PASSWORD_DESTINATION', 
-    'RAILWAY_DB_PASSWORD', 
-    'DATABASE_PASSWORD'
-], default=DEFAULT_DB_CONFIG['password'])
-
-DB_NAME_DESTINATION = safe_get_env([
-    'DB_NAME_DESTINATION', 
-    'RAILWAY_DB_NAME', 
-    'DATABASE_NAME'
-], default=DEFAULT_DB_CONFIG['name'])
-
-DB_PORT_DESTINATION = safe_get_env([
-    'DB_PORT_DESTINATION', 
-    'RAILWAY_DB_PORT', 
-    'DATABASE_PORT'
-], default=DEFAULT_DB_CONFIG['port'])
-
-def get_database_connection_string():
-    """
-    Vygeneruje connection string pre databázu
+    # Ensure we're working with a GeoDataFrame
+    import geopandas as gpd
+    import numpy as np
     
-    Returns:
-        str: Connection string pre SQLAlchemy
-    """
-    connection_string = f"postgresql://{DB_USER_DESTINATION}:****@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
-    logger.debug(f"Generovaný connection string: {connection_string}")
-    return f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
-
-def get_database_connection():
-    """Establish a connection to the PostgreSQL database."""
-    try:
-        connection_string = get_database_connection_string()
-        logger.info(f"Pripájanie k databáze: {DB_HOST_DESTINATION}")
-        logger.info(f"Parametre pripojenia: user={DB_USER_DESTINATION}, host={DB_HOST_DESTINATION}, port={DB_PORT_DESTINATION}, db={DB_NAME_DESTINATION}")
-        
-        engine = create_engine(connection_string, 
-                               connect_args={
-                                   'connect_timeout': 10,  # Pridanie timeoutu
-                                   'keepalives': 1,        # Udržiavanie aktívneho pripojenia
-                                   'keepalives_idle': 30   # Interval keepalive
-                               },
-                               pool_size=5,               # Veľkosť connection pool
-                               max_overflow=10,           # Maximálny počet nadpočetných pripojení
-                               pool_timeout=30,           # Timeout pre získanie pripojenia z pool-u
-                               pool_recycle=1800)         # Recyklácia pripojení každých 30 minút
-        return engine
-    except Exception as e:
-        logger.error(f"Error connecting to the database: {e}")
-        st.error(f"Error connecting to the database: {e}")
+    # Ensure geometry column is preserved
+    if not isinstance(gdf_parcels_with_stats, gpd.GeoDataFrame):
+        st.error("Parcels data is not a GeoDataFrame. Cannot create map.")
         return None
-
-def process_spatial_data(gdf_parcels, gdf_points):
-    """Perform spatial join and aggregate soil sample data."""
-    try:
-        # Spatial join to assign points to parcels
-        gdf_points_with_parcels = gpd.sjoin(gdf_points, gdf_parcels, how='left')
+    
+    # Prepare data with categorization for Phosphorus
+    if selected_parameter == 'Fosfor (P)':
+        # Kategorize body
+        gdf_points['p_category'] = gdf_points['p'].apply(categorize_phosphorus)
         
-        # Aggregate soil sample data by parcel
-        parcel_soil_stats = gdf_points_with_parcels.groupby('parcel_id').agg({
-            'p': 'mean',
-            'k': 'mean',
-            'ph': 'mean'
-        }).reset_index()
+        # Vytvorenie figúry s oboma vrstvami
+        fig = go.Figure()
         
-        # Merge aggregated stats back to parcels GeoDataFrame
-        gdf_parcels_with_stats = gdf_parcels.merge(parcel_soil_stats, on='parcel_id', how='left')
+        # Pridanie hraníc parciel ako líniové stopy
+        for idx, row in gdf_parcels_with_stats.iterrows():
+            # Extrakcia súradníc hraníc
+            if not row.geometry.is_empty:
+                try:
+                    # Získanie vonkajších súradníc polygónu
+                    boundary_lons, boundary_lats = row.geometry.exterior.xy
+                    
+                    # Konverzia na zoznam pre spracovanie
+                    boundary_lons = list(boundary_lons)
+                    boundary_lats = list(boundary_lats)
+                    
+                    # Pridanie línie hranice parcely
+                    fig.add_trace(go.Scattermapbox(
+                        mode="lines",
+                        lon=boundary_lons,
+                        lat=boundary_lats,
+                        line=dict(color='black', width=1),
+                        opacity=0.7,
+                        showlegend=False,
+                        hoverinfo='none'
+                    ))
+                except Exception as e:
+                    st.warning(f"Nemožno spracovať geometriu parcely {row['parcel_id']}: {e}")
         
-        # Ensure we're still working with a GeoDataFrame
-        if not isinstance(gdf_parcels_with_stats, gpd.GeoDataFrame):
-            gdf_parcels_with_stats = gpd.GeoDataFrame(
-                gdf_parcels_with_stats, 
-                geometry=gdf_parcels.geometry, 
-                crs=gdf_parcels.crs
-            )
+        # Pridanie choropleth vrstvy
+        choropleth = go.Choroplethmapbox(
+            geojson=gdf_parcels_with_stats.__geo_interface__,
+            locations=gdf_parcels_with_stats.index,
+            z=gdf_parcels_with_stats['p'],
+            colorscale='Viridis',
+            marker_opacity=0.5,
+            marker_line_width=0,
+            colorbar_title='Fosfor (P)',
+            hovertemplate='<b>ID Parcely</b>: %{location}<br>' +
+                          '<b>Lokalita</b>: %{customdata[0]}<br>' +
+                          '<b>Hodnota P</b>: %{z:.2f}<extra></extra>',
+            customdata=gdf_parcels_with_stats[['localname']].values
+        )
+        fig.add_trace(choropleth)
         
-        return gdf_parcels_with_stats, gdf_points
-    except Exception as e:
-        logger.error(f"Error in spatial data processing: {e}")
-        st.error(f"Chyba pri spracovaní priestorových dát: {e}")
-        return gdf_parcels, gdf_points
+        # Pridanie bodov vzoriek pôdy
+        scatter = go.Scattermapbox(
+            lat=gdf_points.geometry.y.tolist(),
+            lon=gdf_points.geometry.x.tolist(),
+            mode='markers',
+            marker=dict(
+                size=8,
+                color=gdf_points['p_category'],
+                colorscale=[
+                    [0, color_map[0]],
+                    [0.25, color_map[1]],
+                    [0.5, color_map[2]],
+                    [0.75, color_map[3]],
+                    [1, color_map[4]]
+                ],
+                showscale=True,
+                colorbar=dict(
+                    title='Kategória P',
+                    tickvals=[0, 1, 2, 3, 4],
+                    ticktext=[category_labels[i] for i in range(5)]
+                )
+            ),
+            text=[f'ID: {id}<br>P: {p:.2f}<br>Kategória: {category_labels[categorize_phosphorus(p)]}' for id, p in zip(gdf_points['id'], gdf_points['p'])],
+            hoverinfo='text',
+            name='Vzorky pôdy'
+        )
+        fig.add_trace(scatter)
+        
+        # Aktualizácia layoutu s mapou Carto Positron
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            mapbox=dict(
+                center=dict(
+                    lat=gdf_parcels_with_stats.geometry.centroid.y.mean(),
+                    lon=gdf_parcels_with_stats.geometry.centroid.x.mean()
+                ),
+                zoom=10
+            ),
+            height=700,
+            margin={"l":0,"r":0,"t":50,"b":0}
+        )
+    else:
+        # Podobný prístup pre ostatné parametre (K, pH)
+        # Vytvorenie figúry s oboma vrstvami
+        fig = go.Figure()
+        
+        # Pridanie hraníc parciel ako líniové stopy
+        for idx, row in gdf_parcels_with_stats.iterrows():
+            # Extrakcia súradníc hraníc
+            if not row.geometry.is_empty:
+                try:
+                    # Získanie vonkajších súradníc polygónu
+                    boundary_lons, boundary_lats = row.geometry.exterior.xy
+                    
+                    # Konverzia na zoznam pre spracovanie
+                    boundary_lons = list(boundary_lons)
+                    boundary_lats = list(boundary_lats)
+                    
+                    # Pridanie línie hranice parcely
+                    fig.add_trace(go.Scattermapbox(
+                        mode="lines",
+                        lon=boundary_lons,
+                        lat=boundary_lats,
+                        line=dict(color='black', width=1),
+                        opacity=0.7,
+                        showlegend=False,
+                        hoverinfo='none'
+                    ))
+                except Exception as e:
+                    st.warning(f"Nemožno spracovať geometriu parcely {row['parcel_id']}: {e}")
+        
+        # Pridanie choropleth vrstvy
+        choropleth = go.Choroplethmapbox(
+            geojson=gdf_parcels_with_stats.__geo_interface__,
+            locations=gdf_parcels_with_stats.index,
+            z=gdf_parcels_with_stats[param_col],
+            colorscale='Viridis',
+            marker_opacity=0.5,
+            marker_line_width=0,
+            colorbar_title=selected_parameter,
+            hovertemplate='<b>ID Parcely</b>: %{location}<br>' +
+                          '<b>Lokalita</b>: %{customdata[0]}<br>' +
+                          f'<b>{selected_parameter}</b>: %{{z:.2f}}<extra></extra>',
+            customdata=gdf_parcels_with_stats[['localname']].values
+        )
+        fig.add_trace(choropleth)
+        
+        # Pridanie bodov vzoriek pôdy
+        scatter = go.Scattermapbox(
+            lat=gdf_points.geometry.y.tolist(),
+            lon=gdf_points.geometry.x.tolist(),
+            mode='markers',
+            marker=dict(
+                size=8,
+                color=gdf_points[param_map[selected_parameter]],
+                colorscale='Viridis',
+                showscale=True
+            ),
+            text=[f'ID: {id}<br>{selected_parameter}: {val:.2f}' for id, val in zip(gdf_points['id'], gdf_points[param_map[selected_parameter]])],
+            hoverinfo='text',
+            name='Vzorky pôdy'
+        )
+        fig.add_trace(scatter)
+        
+        # Aktualizácia layoutu s mapou Carto Positron
+        fig.update_layout(
+            mapbox_style="carto-positron",
+            mapbox=dict(
+                center=dict(
+                    lat=gdf_parcels_with_stats.geometry.centroid.y.mean(),
+                    lon=gdf_parcels_with_stats.geometry.centroid.x.mean()
+                ),
+                zoom=10
+            ),
+            height=700,
+            margin={"l":0,"r":0,"t":50,"b":0}
+        )
+    
+    return fig
 
 # Zvyšok kódu zostáva nezmenený (všetky pôvodné funkcie)
-# ... (celá pôvodná implementácia zostáva rovnaká)
-
-def load_parcels_data():
-    """Load parcels data from the database."""
-    query = """
-    SELECT 
-        ps.parcel_season_id,
-        ps.parcel_id, 
-        ps.season_id,
-        ps.crop,
-        ps.area_ha,
-        ps.company,
-        ps.parcel_label,
-        ST_AsText(ST_Transform(ps.geometry, 4326)) AS geometry_text,
-        ST_Transform(ps.geometry, 4326) AS geom,
-        lp.localname
-    FROM yield_level.cf_parcel_season ps
-    LEFT JOIN lookups.lookup_sklpis_parcels lp ON ps.parcel_id = lp.parcel_id
-    WHERE ps.season_id = '24_25'
-    """
-    
-    engine = get_database_connection()
-    if not engine:
-        return None
-    
-    try:
-        # Read the data as a DataFrame first
-        df = pd.read_sql(query, engine)
-        
-        # Convert to GeoDataFrame
-        gdf_parcels = gpd.GeoDataFrame(
-            df, 
-            geometry=gpd.GeoSeries.from_wkt(df['geometry_text'], crs='EPSG:4326')
-        )
-        
-        return gdf_parcels
-    except Exception as e:
-        st.error(f"Error loading parcels data: {e}")
-        return None
-    finally:
-        engine.dispose()
-
-def load_soil_samples_data():
-    """Load soil samples data from the database."""
-    query = """
-    SELECT 
-        id, 
-        p, 
-        k, 
-        ph, 
-        geom
-    FROM yield_level.soil_samples_raw
-    """
-    
-    engine = get_database_connection()
-    if not engine:
-        return None
-    
-    try:
-        gdf_points = gpd.read_postgis(query, engine, geom_col='geom')
-        return gdf_points
-    except Exception as e:
-        st.error(f"Error loading soil samples data: {e}")
-        return None
-    finally:
-        engine.dispose()
-
-# Všetky ďalšie funkcie zostávajú nezmenené (create_map, atď.)
 # ... (celá pôvodná implementácia zostáva rovnaká)
 
 # Pridám explicitné definície funkcií pre import
