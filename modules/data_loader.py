@@ -1,34 +1,73 @@
+import os
+import toml
+from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
-import os
-import psycopg2
 from sqlalchemy import create_engine
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Database connection parameters
-DB_USER_DESTINATION = os.getenv('DB_USER_DESTINATION', 'db_admin')
-DB_PASSWORD_DESTINATION = os.getenv('DB_PASSWORD_DESTINATION', '')
-DB_HOST_DESTINATION = os.getenv('DB_HOST_DESTINATION')
+# Funkcia na načítanie konfigurácie z railway.toml
+def load_railway_config():
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
+        if os.path.exists(config_path):
+            return toml.load(config_path)
+    except Exception as e:
+        st.warning(f"Chyba pri načítaní railway.toml: {e}")
+    return {}
 
-# Kontrola povinných premenných prostredia
-REQUIRED_ENV_VARS = ['DB_USER_DESTINATION', 'DB_PASSWORD_DESTINATION', 'DB_HOST_DESTINATION', 'DB_NAME_DESTINATION']
-missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+# Database connection parameters
+DB_USER_DESTINATION = (
+    os.getenv('DB_USER_DESTINATION') or 
+    os.getenv('RAILWAY_DB_USER') or 
+    load_railway_config().get('database', {}).get('user')
+)
+DB_PASSWORD_DESTINATION = (
+    os.getenv('DB_PASSWORD_DESTINATION') or 
+    os.getenv('RAILWAY_DB_PASSWORD') or 
+    load_railway_config().get('database', {}).get('password')
+)
+DB_HOST_DESTINATION = (
+    os.getenv('DB_HOST_DESTINATION') or 
+    os.getenv('RAILWAY_DB_HOST') or 
+    load_railway_config().get('database', {}).get('host')
+)
+DB_NAME_DESTINATION = (
+    os.getenv('DB_NAME_DESTINATION') or 
+    os.getenv('RAILWAY_DB_NAME') or 
+    load_railway_config().get('database', {}).get('name', 'postgres')
+)
+DB_PORT_DESTINATION = (
+    os.getenv('DB_PORT_DESTINATION') or 
+    os.getenv('RAILWAY_DB_PORT') or 
+    load_railway_config().get('database', {}).get('port', 5432)
+)
+
+# Kontrola povinných premenných
+REQUIRED_VARS = [
+    ('DB_USER_DESTINATION', 'Používateľské meno databázy'),
+    ('DB_PASSWORD_DESTINATION', 'Heslo databázy'),
+    ('DB_HOST_DESTINATION', 'Hostiteľ databázy'),
+    ('DB_NAME_DESTINATION', 'Názov databázy')
+]
+
+missing_vars = [name for name, desc in REQUIRED_VARS if not locals()[name]]
 
 if missing_vars:
-    raise ValueError(f"Chýbajúce povinné premenné prostredia: {', '.join(missing_vars)}. Skontrolujte .env súbor.")
-DB_NAME_DESTINATION = os.getenv('DB_NAME_DESTINATION', 'postgres')
+    error_message = "Chýbajúce konfiguračné premenné:\n" + "\n".join(
+        f"- {name}" for name in missing_vars
+    )
+    st.error(error_message + "\n\nSkontrolujte .env, railway.toml alebo nastavenia Railway.")
+    raise ValueError(error_message)
 
 @st.cache_data
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
     try:
         # Vytvorenie connection string
-        connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
+        connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
         
         # Vytvorenie engine s pridanými parametrami pre lepšiu diagnostiku
         engine = create_engine(connection_string, 
@@ -53,10 +92,6 @@ def load_data():
             st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
             return None
         
-        # Debug informácie - skryté
-        # st.write("Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
-        # st.dataframe(columns_df)
-        
         # Dynamické vytvorenie SELECT query na základe dostupných stĺpcov
         select_columns = []
         required_columns = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id']
@@ -73,174 +108,19 @@ def load_data():
         
         # Vytvorenie SQL query - všetky sezóny pre výnosy
         columns_str = ', '.join(select_columns)
-        query = f"""
-        SELECT {columns_str}
-        FROM yield_level.skeagis_yields
-        WHERE yield_ha > 0
-        ORDER BY season, parcel_id
-        """
+        
+        # Samotný dopyt na načítanie dát
+        query = f"SELECT {columns_str} FROM yield_level.skeagis_yields"
         
         # Načítanie dát
         df = pd.read_sql(query, engine)
         
-        # Konverzia dátových typov
-        df['yield_ha'] = pd.to_numeric(df['yield_ha'], errors='coerce')
-        
-        # Konverzia area ak existuje
-        if 'area' in df.columns:
-            df['area'] = pd.to_numeric(df['area'], errors='coerce')
-        else:
-            df['area'] = 1.0  # Default plocha
-        
-        # Parsovanie season do roku (napr. "19_20" -> 2019)
-        df['year'] = df['season'].apply(parse_season_to_year)
-        
-        # Pridanie dummy stĺpca crop ak neexistuje ppa_crop_id
-        if 'ppa_crop_id' not in df.columns:
-            df['ppa_crop_id'] = 'Neznáma plodina'  # Default hodnota
-        
-        # Filtrovanie len platných výnosov a rokov
-        df = df[(df['yield_ha'] > 0) & (df['year'].notna())]
-        
-        # Skontrolujeme dostupné stĺpce v geometrické tabuľke
-        geometry_columns_query = """
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_schema = 'yield_level' 
-        AND table_name = 'cf_parcel_season'
-        ORDER BY ordinal_position
-        """
-        
-        geometry_columns_df = pd.read_sql(geometry_columns_query, engine)
-        # Debug informácie - skryté
-        # st.write("Dostupné stĺpce v tabuľke yield_level.cf_parcel_season:")
-        # st.dataframe(geometry_columns_df)
-        
-        # Načítanie geometrie z yield_level.cf_parcel_season s PostGIS transformáciou
-        # st.write("Načítavam geometrie pomocou PostGIS funkcií...")
-        
-        geometry_query_postgis = """
-        SELECT 
-            parcel_id,
-            ST_AsText(ST_Transform(geometry, 4326)) as geometry_wgs84
-        FROM yield_level.cf_parcel_season
-        WHERE geometry IS NOT NULL AND season_id = '24_25'
-        """
-        
-        geometry_df_postgis = pd.read_sql(geometry_query_postgis, engine)
-        
-        # Spojenie dát s geometriou
-        df = df.merge(geometry_df_postgis, on='parcel_id', how='left')
-        df['geometry'] = df['geometry_wgs84']
-        df = df.drop('geometry_wgs84', axis=1, errors='ignore')
-        
-        # Načítanie lookup tabuľky pre localname
-        lookup_query = """
-        SELECT parcel_id, localname, company
-        FROM lookups.lookup_sklpis_parcels
-        """
-        
-        lookup_df = pd.read_sql(lookup_query, engine)
-        
-        # Spojenie s lookup tabuľkou
-        df = df.merge(lookup_df, on='parcel_id', how='left')
-        
-        # Nahradenie parcel_id za localname kde je dostupné
-        df['parcel_display_name'] = df['localname'].fillna(df['parcel_id'])
-        
-        # Načítanie lookup tabuľky pre crop názvy
-        crop_lookup_query = """
-        SELECT ppa_crop_id, skeagis_crop_name
-        FROM lookups.lookup_crops
-        """
-        
-        crop_lookup_df = pd.read_sql(crop_lookup_query, engine)
-        
-        # Spojenie s crop lookup tabuľkou
-        df = df.merge(crop_lookup_df, on='ppa_crop_id', how='left')
-        
-        # Nahradenie ppa_crop_id za skeagis_crop_name kde je dostupné
-        df['crop_display_name'] = df['skeagis_crop_name'].fillna(df['ppa_crop_id'])
-        
-        # Pre kompatibilitu s existujúcim kódom vytvoríme aj stĺpec crop
-        df['crop'] = df['crop_display_name']
-        
-        # Zobrazíme štatistiky konverzie - skryté
-        # total_geometries = len(df)
-        # valid_geometries = df['geometry'].notna().sum()
-        # st.success(f"PostGIS konverzia úspešná: {valid_geometries}/{total_geometries} geometrií")
-        
-        # Zobrazíme vzorku dát - skryté
-        # if not df.empty:
-        #     st.write("Vzorka dát:")
-        #     sample_cols = ['parcel_id', 'yield_ha', 'season', 'ppa_crop_id', 'area']
-        #     available_cols = [col for col in sample_cols if col in df.columns]
-        #     st.dataframe(df[available_cols].head())
-        
-        # Pridanie agev_parcel_id pre kompatibilitu s existujúcim kódom
-        df['agev_parcel_id'] = df['parcel_id']
-        
-        # Vytvorenie name stĺpca z parcel_display_name (localname alebo parcel_id)
-        df['name'] = df['parcel_display_name'].astype(str)
-        
+        # Zatvorenie spojenia
         engine.dispose()
         
         return df
+    
     except Exception as e:
-        st.error(f"Chyba pri načítaní dát z databázy: {e}")
+        st.error(f"Chyba pri načítaní dát: {e}")
+        st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
         return None
-
-def parse_season_to_year(season_str):
-    """Parsovanie season string na rok (napr. '19_20' -> 2019)"""
-    try:
-        if pd.isna(season_str):
-            return None
-        
-        # Rozdelenie na dve časti (napr. "19_20" -> ["19", "20"])
-        parts = str(season_str).split('_')
-        if len(parts) >= 2:
-            # Prvá časť je rok začiatku sezóny
-            year_part = parts[0]
-            # Konverzia na 4-ciferný rok
-            if len(year_part) == 2:
-                year = 2000 + int(year_part)
-            else:
-                year = int(year_part)
-            return year
-        return None
-    except:
-        return None
-
-def parse_geometry(geometry_str):
-    """Parsovanie geometry string na súradnice"""
-    try:
-        if pd.isna(geometry_str) or geometry_str == '':
-            return None, None
-        
-        # Hľadanie súradníc v MULTIPOLYGON string
-        # Extrahujeme prvé súradnice pre zjednodušenie
-        coords_match = re.search(r'\(\(([^)]+)\)', str(geometry_str))
-        if coords_match:
-            coords_str = coords_match.group(1)
-            # Zoberieme prvú dvojicu súradníc
-            first_coord = coords_str.split(',')[0].strip()
-            lon, lat = map(float, first_coord.split())
-            return lat, lon
-        
-        return None, None
-    except:
-        return None, None
-
-def calculate_yield_percentage(df):
-    """Výpočet výnosu v % oproti priemeru za rok a plodinu"""
-    # Výpočet priemerného výnosu za rok a plodinu
-    yearly_crop_avg = df.groupby(['year', 'crop'])['yield_ha'].mean().reset_index()
-    yearly_crop_avg = yearly_crop_avg.rename(columns={'yield_ha': 'avg_yield_crop_year'})
-    
-    # Spojenie s pôvodnými dátami
-    df_with_avg = df.merge(yearly_crop_avg, on=['year', 'crop'], how='left')
-    
-    # Výpočet percentuálneho výnosu
-    df_with_avg['yield_percentage'] = (df_with_avg['yield_ha'] / df_with_avg['avg_yield_crop_year']) * 100
-    
-    return df_with_avg

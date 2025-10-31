@@ -36,8 +36,18 @@ streamlit run yield_analysis_app_exata.py
 
 ## Deployment on Railway
 1. Connect your GitHub repository to Railway
-2. Set environment variables in Railway dashboard
-3. Deploy automatically
+2. Set the following environment variables in Railway dashboard:
+   - `DB_USER_DESTINATION`: Your database username
+   - `DB_PASSWORD_DESTINATION`: Your database password
+   - `DB_HOST_DESTINATION`: Your database host (e.g., team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com)
+   - `DB_NAME_DESTINATION`: Your database name (default: 'postgres')
+3. Ensure your database security group allows connections from Railway
+4. Deploy automatically
+
+### Troubleshooting Railway Deployment
+- Verify all database environment variables are set correctly
+- Check database network settings and security groups
+- Ensure the database is running and accessible from external networks
 
 ## Features
 - Enterprise statistics

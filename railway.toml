@@ -1,0 +1,9 @@
+[database]
+user = 'db_admin'
+password = 'Ybm=Zjk#sTf3#^]ybD<k'
+host = 'team-pz.cyp6scadbpmv.eu-central-1.rds.amazonaws.com'
+name = 'postgres'
+port = 5432
+
+[railway]
+environment = 'production'
