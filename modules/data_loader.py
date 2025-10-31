@@ -1,4 +1,5 @@
 import os
+import sys
 import toml
 from dotenv import load_dotenv
 import streamlit as st
@@ -10,13 +11,61 @@ import socket
 
 # Konfigurácia logovania
 logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('database_connection.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Funkcia na komplexnú diagnostiku konfigurácie
+def diagnose_database_config():
+    """
+    Komplexná diagnostika konfigurácie databázy
+    
+    Zaznamenáva všetky možné zdroje konfigurácie a ich hodnoty
+    """
+    logger.debug("Začiatok diagnostiky databázovej konfigurácie")
+    
+    # Kontrola environment premenných
+    logger.debug("Environment premenné:")
+    env_vars = [
+        'DB_HOST_DESTINATION', 
+        'DB_USER_DESTINATION', 
+        'DB_PASSWORD_DESTINATION', 
+        'DB_NAME_DESTINATION', 
+        'DB_PORT_DESTINATION',
+        'RAILWAY_DB_HOST',
+        'RAILWAY_DB_USER',
+        'RAILWAY_DB_PASSWORD',
+        'RAILWAY_DB_NAME',
+        'RAILWAY_DB_PORT'
+    ]
+    
+    for var in env_vars:
+        value = os.getenv(var)
+        logger.debug(f"{var}: {value if 'PASSWORD' not in var else '****'}")
+    
+    # Kontrola railway.toml
+    railway_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
+    logger.debug(f"Cesta k railway.toml: {railway_config_path}")
+    
+    try:
+        if os.path.exists(railway_config_path):
+            railway_config = toml.load(railway_config_path)
+            logger.debug("Obsah railway.toml:")
+            logger.debug(str(railway_config))
+        else:
+            logger.debug("Súbor railway.toml neexistuje")
+    except Exception as e:
+        logger.error(f"Chyba pri čítaní railway.toml: {e}")
+    
+    # Kontrola aktuálneho pracovného adresára a ciest
+    logger.debug(f"Aktuálny pracovný adresár: {os.getcwd()}")
+    logger.debug(f"Cesta skriptu: {__file__}")
+    logger.debug(f"Systémové cesty: {sys.path}")
 
 def safe_get_env(env_vars, default=None):
     """
@@ -29,12 +78,17 @@ def safe_get_env(env_vars, default=None):
     Returns:
         str: Hodnota premennej prostredia alebo predvolená hodnota
     """
+    logger.debug(f"Hľadanie hodnoty pre premenné: {env_vars}")
+    
     # Najprv skúsi railway.toml
     try:
         railway_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'railway.toml')
+        logger.debug(f"Cesta k railway.toml: {railway_config_path}")
+        
         if os.path.exists(railway_config_path):
             railway_config = toml.load(railway_config_path)
             database_config = railway_config.get('database', {})
+            logger.debug(f"Konfigurácia z railway.toml: {database_config}")
             
             # Mapovanie kľúčov z railway.toml na premenné prostredia
             config_map = {
@@ -49,16 +103,16 @@ def safe_get_env(env_vars, default=None):
                 if env_var in env_vars:
                     value = database_config.get(config_key)
                     if value:
-                        logger.info(f"Použitá hodnota z railway.toml: {config_key}")
+                        logger.debug(f"Použitá hodnota z railway.toml: {config_key} = {value}")
                         return value
     except Exception as e:
-        logger.warning(f"Chyba pri čítaní railway.toml: {e}")
+        logger.error(f"Chyba pri čítaní railway.toml: {e}")
     
     # Potom skúsi premenné prostredia
     for var in env_vars:
         value = os.getenv(var)
         if value:
-            logger.info(f"Použitá premenná prostredia: {var}")
+            logger.debug(f"Použitá premenná prostredia: {var} = {value}")
             return value
     
     logger.warning(f"Nepodarilo sa nájsť hodnotu pre premenné: {env_vars}")
@@ -72,6 +126,12 @@ DEFAULT_DB_CONFIG = {
     'name': 'postgres',
     'port': '5432'
 }
+
+# Vykonanie diagnostiky pred načítaním konfigurácie
+diagnose_database_config()
+
+# Load environment variables
+load_dotenv()
 
 # Database connection parameters
 DB_HOST_DESTINATION = safe_get_env([
@@ -104,6 +164,12 @@ DB_PORT_DESTINATION = safe_get_env([
     'DATABASE_PORT'
 ], default=DEFAULT_DB_CONFIG['port'])
 
+logger.debug(f"Finálna konfigurácia:")
+logger.debug(f"Host: {DB_HOST_DESTINATION}")
+logger.debug(f"User: {DB_USER_DESTINATION}")
+logger.debug(f"Name: {DB_NAME_DESTINATION}")
+logger.debug(f"Port: {DB_PORT_DESTINATION}")
+
 def get_database_connection_string():
     """
     Vygeneruje connection string pre databázu
@@ -111,7 +177,9 @@ def get_database_connection_string():
     Returns:
         str: Connection string pre SQLAlchemy
     """
-    return f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
+    connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}:{DB_PORT_DESTINATION}/{DB_NAME_DESTINATION}"
+    logger.debug(f"Generovaný connection string: {connection_string.replace(DB_PASSWORD_DESTINATION, '****')}")
+    return connection_string
 
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
