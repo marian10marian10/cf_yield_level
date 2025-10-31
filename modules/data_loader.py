@@ -3,6 +3,7 @@ import toml
 from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sqlalchemy import create_engine
 
 # Load environment variables
@@ -62,7 +63,6 @@ if missing_vars:
     st.error(error_message + "\n\nSkontrolujte .env, railway.toml alebo nastavenia Railway.")
     raise ValueError(error_message)
 
-@st.cache_data
 def load_data():
     """Načítanie dát z PostgreSQL databázy"""
     try:
@@ -124,3 +124,50 @@ def load_data():
         st.error(f"Chyba pri načítaní dát: {e}")
         st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
         return None
+
+def calculate_yield_percentage(df):
+    """
+    Výpočet percentuálnych výnosov pre každú plodinu
+    
+    Args:
+        df (pandas.DataFrame): DataFrame s výnosmi
+    
+    Returns:
+        pandas.DataFrame: DataFrame s pridaným stĺpcom percentuálnych výnosov
+    """
+    if df is None or df.empty:
+        st.warning("Prázdny DataFrame pre výpočet percentuálnych výnosov.")
+        return df
+    
+    try:
+        # Pridanie stĺpca 'crop' podľa ppa_crop_id
+        crop_mapping = {
+            1: 'Pšenica letná ozimná',
+            2: 'Jačmeň jarný',
+            3: 'Kukurica na zrno',
+            4: 'Repka ozimná',
+            # Pridajte ďalšie mapovanie podľa potreby
+        }
+        
+        df['crop'] = df['ppa_crop_id'].map(crop_mapping).fillna('Iné')
+        
+        # Výpočet percentuálnych výnosov pre každú plodinu
+        crop_yields = df.groupby('crop')['yield_ha'].agg(['mean', 'min', 'max'])
+        crop_yields['range'] = crop_yields['max'] - crop_yields['min']
+        
+        # Pridanie percentuálnych výnosov
+        def calculate_percentage(row, crop_mean):
+            if pd.isna(row['yield_ha']) or pd.isna(crop_mean):
+                return np.nan
+            return ((row['yield_ha'] - crop_mean) / crop_mean) * 100
+        
+        for crop, stats in crop_yields.iterrows():
+            df.loc[df['crop'] == crop, 'yield_percentage'] = df[df['crop'] == crop].apply(
+                lambda row: calculate_percentage(row, stats['mean']), axis=1
+            )
+        
+        return df
+    
+    except Exception as e:
+        st.error(f"Chyba pri výpočte percentuálnych výnosov: {e}")
+        return df
