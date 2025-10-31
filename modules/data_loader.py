@@ -23,8 +23,11 @@ def load_data():
         # Vytvorenie connection string
         connection_string = f"postgresql://{DB_USER_DESTINATION}:{DB_PASSWORD_DESTINATION}@{DB_HOST_DESTINATION}/{DB_NAME_DESTINATION}"
         
-        # Vytvorenie engine
-        engine = create_engine(connection_string)
+        # Vytvorenie engine s pridanými parametrami pre lepšiu diagnostiku
+        engine = create_engine(connection_string, 
+                               connect_args={'connect_timeout': 10},  # Pridanie timeoutu
+                               pool_size=5,  # Veľkosť connection pool
+                               max_overflow=10)  # Maximálny počet nadpočetných pripojení
         
         # Najprv skontrolujeme dostupné stĺpce v tabuľke
         check_columns_query = """
@@ -35,8 +38,13 @@ def load_data():
         ORDER BY ordinal_position
         """
         
-        columns_df = pd.read_sql(check_columns_query, engine)
-        available_columns = columns_df['column_name'].tolist()
+        try:
+            columns_df = pd.read_sql(check_columns_query, engine)
+            available_columns = columns_df['column_name'].tolist()
+        except Exception as column_error:
+            st.error(f"Chyba pri načítaní stĺpcov: {column_error}")
+            st.warning("Skontrolujte pripojenie k databáze a oprávnenia.")
+            return None
         
         # Debug informácie - skryté
         # st.write("Dostupné stĺpce v tabuľke yield_level.skeagis_yields:")
